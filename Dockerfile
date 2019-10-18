@@ -10,7 +10,7 @@ FROM node:10.15.3-slim
 
 # Install some general dependencies for stuff below and for CircleCI;
 # https://circleci.com/docs/2.0/custom-images/#required-tools-for-primary-containers
-RUN apt-get update && apt-get install -yq libgconf-2-4 wget git ssh --no-install-recommends
+RUN apt-get update && apt-get install -yq libgconf-2-4 wget git ssh python build-essential --no-install-recommends
 
 # Install Google Chrome for Puppeteer.
 # https://github.com/GoogleChrome/puppeteer/blob/master/docs/troubleshooting.md#running-puppeteer-in-docker
