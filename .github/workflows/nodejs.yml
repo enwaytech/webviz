@@ -29,5 +29,5 @@ jobs:
         image: webwiz
         tag: latest
         registry: docker.pkg.github.com
-        dockerfile: Dockerfile.ci
+        dockerfile: Dockerfile
         username: stefan-enway
