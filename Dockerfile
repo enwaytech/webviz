@@ -30,5 +30,3 @@ Copy . .
 RUN npm run bootstrap
 
 RUN npm run build
-
-RUN npm run docs
