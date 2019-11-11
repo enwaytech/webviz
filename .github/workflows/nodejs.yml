@@ -28,7 +28,7 @@ jobs:
         CI: true
     - uses: elgohr/Publish-Docker-Github-Action@master
       with:
-        name: webwiz:latest
+        name: enwaytech/webviz/webwiz:latest
         registry: docker.pkg.github.com
         dockerfile: Dockerfile
         username: stefan-enway
