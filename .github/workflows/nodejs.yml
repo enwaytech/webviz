@@ -24,10 +24,10 @@ jobs:
         #npm run docs (runs webserver)
       env:
         CI: true
-    - uses: mr-smithers-excellent/docker-build-push@v1.0
+    - uses: elgohr/Publish-Docker-Github-Action@master
       with:
-        image: webwiz
-        tag: latest
+        name: webwiz:latest
         registry: docker.pkg.github.com
         dockerfile: Dockerfile
         username: stefan-enway
+        password: ${{ GITHUB_TOKEN }}
