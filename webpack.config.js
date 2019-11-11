@@ -182,7 +182,7 @@ module.exports = {
     contentBase: path.resolve(`${__dirname}/docs/public`),
     hot: true,
     open: true,
-    host: '0.0.0.0' # fixes docker port binding
+    host: '0.0.0.0', // fixes docker port binding
   },
 };
 
