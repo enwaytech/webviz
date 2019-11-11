@@ -1,4 +1,6 @@
 name: Node CI
+  env:
+    GITHUB_TOKEN: ${{ secrets.github_token }}
 
 on: [push]
 
