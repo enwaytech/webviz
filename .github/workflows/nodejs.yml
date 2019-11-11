@@ -1,6 +1,6 @@
 name: Node CI
 env:
-  GITHUB_TOKEN: ${{ secrets.github_token }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 on: [push]
 
@@ -32,4 +32,4 @@ jobs:
         registry: docker.pkg.github.com
         dockerfile: Dockerfile
         username: stefan-enway
-        password: ${{ GITHUB_TOKEN }}
+        password: ${{ secrets.GITHUB_TOKEN }}
