@@ -29,5 +29,5 @@ jobs:
         name: webwiz:latest
         registry: docker.pkg.github.com
         dockerfile: Dockerfile
-        username: ${{ stefan-enway }}
+        username: stefan-enway
         password: ${{ GITHUB_TOKEN }}
