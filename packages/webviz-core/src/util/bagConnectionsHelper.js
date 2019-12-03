@@ -21,19 +21,24 @@ type DatatypeDescription = {
 // Extract one big list of datatypes from the individual connections.
 export function bagConnectionsToDatatypes(connections: $ReadOnlyArray<DatatypeDescription>) {
   const datatypes = {};
-  connections.forEach((connection) => {
-    const connectionTypes = parseMessageDefinition(connection.messageDefinition);
-    connectionTypes.forEach(({ name, definitions }, index) => {
-      // The first definition usually doesn't have an explicit name,
-      // so we get the name from the connection.
-      if (index === 0) {
-        datatypes[connection.type] = definitions;
-      } else if (name) {
-        datatypes[name] = definitions;
-      }
+  try {
+    connections.forEach((connection) => {
+      connection.messageDefinition = getSanitizeMessageDefinition(connection.messageDefinition);
+      const connectionTypes = parseMessageDefinition(connection.messageDefinition);
+      connectionTypes.forEach(({ name, definitions }, index) => {
+        // The first definition usually doesn't have an explicit name,
+        // so we get the name from the connection.
+        if (index === 0) {
+          datatypes[connection.type] = definitions;
+        } else if (name) {
+          datatypes[name] = definitions;
+        }
+      });
     });
-  });
-  return datatypes;
+    return datatypes;
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 // Extract one big list of topics from the individual connections.
@@ -53,4 +58,10 @@ export function bagConnectionsToTopics(connections: $ReadOnlyArray<Connection>):
   });
   // Satisfy flow by using `Object.keys` instead of `Object.values`
   return Object.keys(topics).map((topic) => topics[topic]);
+}
+
+function getSanitizeMessageDefinition(messageDefinition) {
+  messageDefinition = messageDefinition.replace(/True|TRUE/gi, "true");
+  messageDefinition = messageDefinition.replace(/False|FALSE/gi, "false");
+  return messageDefinition;
 }
