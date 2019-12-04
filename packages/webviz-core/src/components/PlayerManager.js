@@ -66,7 +66,7 @@ function PlayerManager({ importPanelLayout, children, userNodes, setNodeDiagnost
     () => {
       const params = new URLSearchParams(window.location.search);
       const remoteDemoBagUrl =
-        "http://storage.enway.ai:9000/bags-studio-16/studio_16_01.bag?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minio%2F20191126%2F%2Fs3%2Faws4_request&X-Amz-Date=20191126T123246Z&X-Amz-Expires=432000&X-Amz-SignedHeaders=host&X-Amz-Signature=336681d16d39b0100893a6eaf26c7b3755feedbe5110f8335810cde27511eb16";
+        "https://storage.enway.ai:9000/bags-studio-16/studio_16_01.bag?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minio%2F20191126%2F%2Fs3%2Faws4_request&X-Amz-Date=20191126T123246Z&X-Amz-Expires=432000&X-Amz-SignedHeaders=host&X-Amz-Signature=336681d16d39b0100893a6eaf26c7b3755feedbe5110f8335810cde27511eb16";
       if (params.has(REMOTE_BAG_URL_QUERY_KEY) || params.has(DEMO_QUERY_KEY)) {
         const url = params.has(REMOTE_BAG_URL_QUERY_KEY)
           ? `${params.get(REMOTE_BAG_URL_QUERY_KEY)}&X-Amz-Credential=${params.get(
