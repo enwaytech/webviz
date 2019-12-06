@@ -11,7 +11,6 @@ import { connect } from "react-redux";
 
 import { setNodeDiagnostics, type SetNodeDiagnostics } from "webviz-core/src/actions/nodeDiagnostics";
 import { importPanelLayout } from "webviz-core/src/actions/panels";
-import { remoteBagConnectionURL } from "webviz-core/src/assets/enway_configs";
 import DocumentDropListener from "webviz-core/src/components/DocumentDropListener";
 import DropOverlay from "webviz-core/src/components/DropOverlay";
 import { MessagePipelineProvider } from "webviz-core/src/components/MessagePipeline";
@@ -66,12 +65,17 @@ function PlayerManager({ importPanelLayout, children, userNodes, setNodeDiagnost
   React.useEffect(
     () => {
       const params = new URLSearchParams(window.location.search);
-      console.log(remoteBagConnectionURL);
-      const remoteBagBaseURL = remoteBagConnectionURL;
-      const remoteDemoBagUrl = "https://open-source-webviz-ui.s3.amazonaws.com/demo.bag";
+      const remoteDemoBagUrl =
+        "https://ireland.enway.ai/bags-studio-16/studio_16_01.bag?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minio%2F20191126%2F%2Fs3%2Faws4_request&X-Amz-Date=20191126T123246Z&X-Amz-Expires=432000&X-Amz-SignedHeaders=host&X-Amz-Signature=336681d16d39b0100893a6eaf26c7b3755feedbe5110f8335810cde27511eb16";
       if (params.has(REMOTE_BAG_URL_QUERY_KEY) || params.has(DEMO_QUERY_KEY)) {
         const url = params.has(REMOTE_BAG_URL_QUERY_KEY)
-          ? remoteBagBaseURL + params.get(REMOTE_BAG_URL_QUERY_KEY) || ""
+          ? `${params.get(REMOTE_BAG_URL_QUERY_KEY)}&X-Amz-Credential=${params.get(
+              "X-Amz-Credential"
+            )}&X-Amz-Date=${params.get("X-Amz-Date")}&X-Amz-Expires=${params.get(
+              "X-Amz-Expires"
+            )}&X-Amz-SignedHeaders=${params.get("X-Amz-SignedHeaders")}&X-Amz-Signature=${params.get(
+              "X-Amz-Signature"
+            )}` || ""
           : remoteDemoBagUrl;
         getRemoteBagGuid(url).then((guid: ?string) => {
           const newPlayer = new RandomAccessPlayer(
