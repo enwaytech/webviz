@@ -183,6 +183,7 @@ module.exports = {
     hot: true,
     open: true,
     host: '0.0.0.0', // fixes docker port binding
+    public: 'rainbow.local.enway.ai:8080'
   },
 };
 
