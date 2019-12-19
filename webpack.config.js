@@ -183,7 +183,8 @@ module.exports = {
     hot: true,
     open: true,
     host: '0.0.0.0', // fixes docker port binding
-    public: 'webviz.enway.ai:443'
+    https: true,
+    public: 'webviz.enway.ai'
   },
 };
 
