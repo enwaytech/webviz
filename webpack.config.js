@@ -185,7 +185,7 @@ module.exports = {
     host: '0.0.0.0', // fixes docker port binding
     https: true,
     port: 8443,
-    public: 'webviz.enway.ai'
+    public: 'webviz.enway.ai:443'
   },
 };
 
