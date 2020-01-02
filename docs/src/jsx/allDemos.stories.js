@@ -17,8 +17,10 @@ import Cones from "./commands/Cones";
 import Cubes from "./commands/Cubes";
 import Cylinders from "./commands/Cylinders";
 import FilledPolygons from "./commands/FilledPolygons";
+import GLText from "./commands/GLText";
 import GLTFScene from "./commands/GLTFScene";
 import LinesDemo from "./commands/LinesDemo";
+import LinesPoses from "./commands/LinesPoses";
 import LinesWireframe from "./commands/LinesWireframe";
 import Overlay from "./commands/Overlay";
 import Points from "./commands/Points";
@@ -46,6 +48,7 @@ const allDemos = {
   FilledPolygons,
   Hitmap,
   LinesDemo,
+  LinesPoses,
   LinesWireframe,
   MouseEvents,
   Overlay,
@@ -54,6 +57,7 @@ const allDemos = {
   SpheresInstancedColor,
   SpheresSingle,
   Text,
+  GLText,
   Triangles,
   GLTFScene,
 };

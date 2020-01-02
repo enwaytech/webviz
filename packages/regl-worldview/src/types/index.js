@@ -110,7 +110,7 @@ export type ComponentReglClickInfo = {
   objects: Array<ClickedObject>,
 };
 
-export type MouseHandler = (MouseEvent, ReglClickInfo) => void;
+export type MouseHandler = (SyntheticMouseEvent<HTMLCanvasElement>, ReglClickInfo) => void;
 
 export type ComponentMouseHandler = (MouseEvent, ComponentReglClickInfo) => void;
 
@@ -179,6 +179,7 @@ export type Cylinder = BaseShape & {
 
 export type Line = BaseShape & {
   points: (Point | Vec3)[],
+  poses?: Pose[],
 };
 
 export type PointType = BaseShape & {
@@ -193,6 +194,8 @@ export type SphereList = BaseShape & {
 export type TriangleList = BaseShape & {
   points: (Point | Vec3)[],
   colors?: (Color | Vec4)[],
+  // Pass true to not render the triangles to the screen - just the hitmap.
+  onlyRenderInHitmap?: boolean,
 };
 
 export type PolygonType = BaseShape & {

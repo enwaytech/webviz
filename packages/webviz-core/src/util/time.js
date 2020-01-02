@@ -1,14 +1,17 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
+import { isEqual } from "lodash";
 import momentDurationFormatSetup from "moment-duration-format";
 import moment from "moment-timezone";
 import { type Time, TimeUtil } from "rosbag";
+
+import { SEEK_TO_QUERY_KEY } from "webviz-core/src/util/globalConstants";
 
 type BatchTimestamp = {
   seconds: number,
@@ -16,6 +19,13 @@ type BatchTimestamp = {
 };
 
 momentDurationFormatSetup(moment);
+
+// Unfortunately, using %checks on this function doesn't actually allow Flow to conclude that the object is a Time.
+// Related: https://github.com/facebook/flow/issues/3614
+const timeFields = new Set(["sec", "nsec"]);
+export function isTime(obj: mixed): boolean {
+  return !!obj && typeof obj === "object" && isEqual(new Set(Object.getOwnPropertyNames(obj)), timeFields);
+}
 
 export function format(stamp: Time) {
   return `${formatDate(stamp)} ${formatTime(stamp)}`;
@@ -236,6 +246,6 @@ export function parseTimeStr(str: string): ?Time {
 
 export function getSeekToTime(): ?Time {
   const params = new URLSearchParams(window.location.search);
-  const seekToParam = params.get("seek-to");
+  const seekToParam = params.get(SEEK_TO_QUERY_KEY);
   return seekToParam ? fromMillis(parseInt(seekToParam)) : null;
 }

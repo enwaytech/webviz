@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -52,6 +52,16 @@ export function arrayToPoint(v: ?[number, number, number]) {
   return { x: v[0], y: v[1], z: v[2] };
 }
 
+// returns the linear interpolation between a and b based on unit-range variable t
+export function lerp(t: number, a: number, b: number): number {
+  // Clamp t to (0, 1)
+  t = Math.min(Math.max(t, 0.0), 1.0);
+  if (a === b) {
+    return a;
+  }
+  return a + t * (b - a);
+}
+
 // the following regex captures characters allowed in the value of a kv-pair in the query component
 // of a URI, minus "&" and "+" because they are handled specially by browsers.
 //   https://tools.ietf.org/html/rfc3986
@@ -69,11 +79,11 @@ export function encodeURLQueryParamValue(value: string): string {
 }
 
 // extra boundary added for jest testing, since jsdom's Blob doesn't support .text()
-export function downloadTextFile(text: string, filePrefixOrName: string) {
-  return downloadFiles([new Blob([text])], filePrefixOrName);
+export function downloadTextFile(text: string, fileName: string) {
+  return downloadFiles([{ blob: new Blob([text]), fileName }]);
 }
 
-export function downloadFiles(blobs: Blob[], filePrefixOrName: string) {
+export function downloadFiles(files: { blob: Blob, fileName: string }[]) {
   const { body } = document;
   if (!body) {
     return;
@@ -83,12 +93,12 @@ export function downloadFiles(blobs: Blob[], filePrefixOrName: string) {
   link.style.display = "none";
   body.appendChild(link);
 
-  const urls = blobs.map((blob) => window.URL.createObjectURL(blob));
-  urls.forEach((url, idx) => {
-    const fileName = blobs.length === 1 ? filePrefixOrName : `${filePrefixOrName}_${idx}`;
-    link.setAttribute("download", fileName);
+  const urls = files.map((file) => {
+    const url = window.URL.createObjectURL(file.blob);
+    link.setAttribute("download", file.fileName);
     link.setAttribute("href", url);
     link.click();
+    return url;
   });
 
   // remove the link after triggering download
@@ -98,4 +108,11 @@ export function downloadFiles(blobs: Blob[], filePrefixOrName: string) {
       URL.revokeObjectURL(url);
     });
   });
+}
+
+// Equivalent to `number % modulus`, but always returns a positive number (given that modulus is
+// a positive number). This is the same as the `%` in e.g. Python.
+// See https://stackoverflow.com/a/4467559 and https://en.wikipedia.org/wiki/Modulo_operation
+export function positiveModulo(number: number, modulus: number): number {
+  return ((number % modulus) + modulus) % modulus;
 }

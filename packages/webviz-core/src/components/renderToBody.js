@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -8,8 +8,10 @@
 
 import * as React from "react";
 import { render, unmountComponentAtNode } from "react-dom";
+import { Provider } from "react-redux";
 import { Router } from "react-router-dom";
 
+import getGlobalStore from "webviz-core/src/store/getGlobalStore";
 import history from "webviz-core/src/util/history";
 
 type RenderedToBodyHandle = {| update: (React.Element<*>) => void, remove: () => void |};
@@ -23,8 +25,11 @@ export default function renderToBody(element: React.Element<*>): RenderedToBodyH
   document.body.appendChild(container);
 
   function ComponentToRender({ children }) {
-    // $FlowFixMe - somehow complains about `history`
-    return <Router history={history}>{children}</Router>;
+    return (
+      <Provider store={getGlobalStore()}>
+        <Router history={history}>{children}</Router>
+      </Provider>
+    );
   }
 
   render(<ComponentToRender>{element}</ComponentToRender>, container);

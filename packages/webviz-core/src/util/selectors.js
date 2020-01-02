@@ -1,18 +1,19 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
-import { intersection } from "lodash";
+import { intersection, keyBy } from "lodash";
 import microMemoize from "micro-memoize";
 import { createSelectorCreator, defaultMemoize, createSelector } from "reselect";
 import shallowequal from "shallowequal";
 
 import type { Topic } from "webviz-core/src/players/types";
 import type { RosDatatypes } from "webviz-core/src/types/RosDatatypes";
+import { SECOND_BAG_PREFIX } from "webviz-core/src/util/globalConstants";
 
 export const getTopicNames = createSelector<*, *, *, _>(
   (topics: Topic[]) => topics,
@@ -25,14 +26,15 @@ export const getSanitizedTopics = microMemoize(
   }
 );
 
+export function getTopicPrefixes(topics: string[]): string[] {
+  // only support one prefix now, can add more such as `/webviz_bag_3` later
+  return topics.some((topic) => topic.startsWith(SECOND_BAG_PREFIX)) ? [SECOND_BAG_PREFIX] : [];
+}
+
 export const topicsByTopicName = createSelector<*, *, *, _>(
   (topics: Topic[]) => topics,
   (topics: Topic[]): { [string]: Topic } => {
-    const results = {};
-    for (const topic of topics) {
-      results[topic.name] = topic;
-    }
-    return results;
+    return keyBy(topics, ({ name }) => name);
   }
 );
 
@@ -43,7 +45,7 @@ export const constantsByDatatype = createSelector<*, *, *, _>(
     const results = {};
     for (const datatype of Object.keys(datatypes)) {
       results[datatype] = {};
-      for (const field of datatypes[datatype]) {
+      for (const field of datatypes[datatype].fields) {
         if (field.isConstant) {
           if (results[datatype][field.value]) {
             results[datatype][field.value] = "<multiple constants match>";
@@ -78,7 +80,7 @@ export const enumValuesByDatatypeAndField = createSelector<*, *, *, _>(
       let constants: { [mixed]: string } = {};
       // constants' types
       let lastType;
-      for (const field of datatypes[datatype]) {
+      for (const field of datatypes[datatype].fields) {
         if (lastType && field.type !== lastType) {
           // encountering new type resets the accumulated constants
           constants = {};

@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -11,6 +11,7 @@
 export interface Channel {
   postMessage(data: any, transfer?: any[]): void;
   onmessage: ?(ev: MessageEvent) => void;
+  terminate: () => void;
 }
 
 const RESPONSE = "$$RESPONSE";
@@ -27,6 +28,7 @@ export function createLinkedChannels(): { local: Channel, remote: Channel } {
         remote.onmessage(ev); // eslint-disable-line no-use-before-define
       }
     },
+    terminate: () => {},
   };
 
   const remote: Channel = {
@@ -37,6 +39,7 @@ export function createLinkedChannels(): { local: Channel, remote: Channel } {
         local.onmessage(ev);
       }
     },
+    terminate: () => {},
   };
   return { local, remote };
 }

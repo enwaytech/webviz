@@ -1,11 +1,12 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
+import DatabaseIcon from "@mdi/svg/svg/database.svg";
 import { storiesOf } from "@storybook/react";
 import { createMemoryHistory } from "history";
 import * as React from "react";
@@ -15,6 +16,7 @@ import { withScreenshot } from "storybook-chrome-screenshot";
 
 import PanelToolbar from "./index";
 import ChildToggle from "webviz-core/src/components/ChildToggle";
+import Icon from "webviz-core/src/components/Icon";
 import { MockPanelContextProvider } from "webviz-core/src/components/Panel";
 import createRootReducer from "webviz-core/src/reducers";
 import configureStore from "webviz-core/src/store/configureStore.testing";
@@ -54,6 +56,7 @@ class PanelToolbarWithOpenMenu extends React.PureComponent<{}> {
         }}>
         <PanelToolbar helpContent={<div />}>
           <div style={{ width: "100%", lineHeight: "22px", paddingLeft: 5 }}>Some controls here</div>
+          <KeepToolbarVisibleHack />
         </PanelToolbar>
       </div>
     );
@@ -94,6 +97,21 @@ storiesOf("<PanelToolbar>", module)
     return (
       <MosaicWrapper width={500}>
         <PanelToolbar helpContent={<div />}>
+          <div style={{ width: "100%", lineHeight: "22px", paddingLeft: 5 }}>Some controls here</div>
+          <KeepToolbarVisibleHack />
+        </PanelToolbar>
+      </MosaicWrapper>
+    );
+  })
+  .add("one additional icon", () => {
+    const additionalIcons = (
+      <Icon>
+        <DatabaseIcon />
+      </Icon>
+    );
+    return (
+      <MosaicWrapper width={500}>
+        <PanelToolbar helpContent={<div />} additionalIcons={additionalIcons}>
           <div style={{ width: "100%", lineHeight: "22px", paddingLeft: 5 }}>Some controls here</div>
           <KeepToolbarVisibleHack />
         </PanelToolbar>

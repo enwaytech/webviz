@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -8,6 +8,7 @@
 
 import type { Time } from "rosbag";
 
+import { type DiagnosticsBuffer } from "webviz-core/src/panels/diagnostics/DiagnosticsHistory";
 import type { Header } from "webviz-core/src/types/Messages";
 
 export const LEVELS: { OK: 0, WARN: 1, ERROR: 2, STALE: 3 } = { OK: 0, WARN: 1, ERROR: 2, STALE: 3 };
@@ -78,4 +79,17 @@ export function computeDiagnosticInfo(status: DiagnosticStatusMessage, stamp: Ti
     id: getDiagnosticId(status),
     displayName,
   };
+}
+
+export function getNodesByLevel(buffer: DiagnosticsBuffer, hardwareIdFilter: string, level: any): DiagnosticInfo[] {
+  if (!hardwareIdFilter) {
+    return Array.from(buffer.diagnosticsByLevel[level].values());
+  }
+  const nodeArray = [];
+  buffer.diagnosticsByLevel[level].forEach((value) => {
+    if (value.displayName.startsWith(hardwareIdFilter)) {
+      nodeArray.push(value);
+    }
+  });
+  return nodeArray;
 }

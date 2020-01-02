@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -8,21 +8,21 @@
 
 import * as React from "react";
 
-import useGlobalData, { type GlobalData } from "webviz-core/src/hooks/useGlobalData";
+import useGlobalVariables, { type GlobalVariables } from "webviz-core/src/hooks/useGlobalVariables";
 
-type GlobalDataActions = {|
-  setGlobalData: (GlobalData) => void,
-  overwriteGlobalData: (GlobalData) => void,
+type GlobalVariablesActions = {|
+  setGlobalVariables: (GlobalVariables) => void,
+  overwriteGlobalVariables: (GlobalVariables) => void,
 |};
 
 type Props = {|
-  children: (GlobalData, GlobalDataActions) => React.Node,
+  children: (GlobalVariables, GlobalVariablesActions) => React.Node,
 |};
 
 export default function GlobalVariablesAccessor(props: Props) {
-  const { globalData, setGlobalData, overwriteGlobalData } = useGlobalData();
-  return props.children(globalData, {
-    setGlobalData,
-    overwriteGlobalData,
+  const { globalVariables, setGlobalVariables, overwriteGlobalVariables } = useGlobalVariables();
+  return props.children(globalVariables, {
+    setGlobalVariables,
+    overwriteGlobalVariables,
   });
 }

@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -25,10 +25,8 @@ export const SToolGroupFixedSizePane = styled.div`
   padding: 8px 0;
 `;
 
-export class ToolGroup<T: string> extends React.Component<{ name: T, children: React.Node }> {
-  render() {
-    return this.props.children;
-  }
+export function ToolGroup<T>({ children }: { name: T, children: React.Node }) {
+  return children;
 }
 
 export function ToolGroupFixedSizePane({ children }: { children: React.Node }) {

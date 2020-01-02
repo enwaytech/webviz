@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -9,7 +9,8 @@
 import React from "react";
 import styled from "styled-components";
 
-import { LINED_CONVEX_HULL_RENDERING_SETTING, SLabel, SDescription, SInput, type TopicSettingsEditorProps } from ".";
+import { LINED_CONVEX_HULL_RENDERING_SETTING, type TopicSettingsEditorProps } from ".";
+import { SLabel, SDescription, SInput } from "./common";
 import Dropdown from "webviz-core/src/components/Dropdown";
 import Flex from "webviz-core/src/components/Flex";
 import type { Marker, MarkerArray } from "webviz-core/src/types/Messages";

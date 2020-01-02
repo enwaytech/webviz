@@ -1,17 +1,17 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
 import { storiesOf } from "@storybook/react";
-import { range } from "lodash";
+import { range, noop } from "lodash";
 import * as React from "react";
 import { withScreenshot } from "storybook-chrome-screenshot";
 
-import CameraModel from "webviz-core/src/panels/ImageView/CameraModel";
+import { getGlobalHooks } from "webviz-core/src/loadWebviz";
 import ImageCanvas from "webviz-core/src/panels/ImageView/ImageCanvas";
 
 const cameraInfo = {
@@ -33,21 +33,43 @@ const cameraInfo = {
   },
 };
 
-const imageData = (() => {
-  const canvas = document.createElement("canvas");
-  canvas.width = 400;
-  canvas.height = 300;
-  const ctx = canvas.getContext("2d");
-  const gradient = ctx.createLinearGradient(0, 0, 400, 300);
-  gradient.addColorStop(0, "cyan");
-  gradient.addColorStop(1, "green");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 400, 300);
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = "red";
-  ctx.strokeRect(0, 0, 400, 300);
-  return canvas.toDataURL().replace(/^data:image\/png;base64,/, "");
-})();
+const imageFormat = "image/png";
+// Image data has to be loaded asynchronously, so use this component to load it for stories.
+function LoadImageMessage({ children }) {
+  const [imageData, setImageData] = React.useState(null);
+  React.useEffect(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 300;
+    const ctx = canvas.getContext("2d");
+    const gradient = ctx.createLinearGradient(0, 0, 400, 300);
+    gradient.addColorStop(0, "cyan");
+    gradient.addColorStop(1, "green");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 400, 300);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "red";
+    ctx.strokeRect(0, 0, 400, 300);
+    canvas.toBlob((blob) => {
+      // $FlowFixMe arrayBuffer function is available Chrome 76+
+      blob.arrayBuffer().then((arrayBuffer) => {
+        setImageData(new Uint8Array(arrayBuffer));
+      });
+    }, imageFormat);
+  }, []);
+  const imageMessage = {
+    op: "message",
+    datatype: "sensor_msgs/CompressedImage",
+    topic: "/foo",
+    receiveTime: { sec: 0, nsec: 0 },
+    message: { format: imageFormat, data: imageData },
+  };
+
+  if (imageData) {
+    return children(imageMessage);
+  }
+  return null;
+}
 
 function marker(type: number, props: {}) {
   return {
@@ -58,14 +80,6 @@ function marker(type: number, props: {}) {
     message: { ...props, type },
   };
 }
-
-const imageMessage = {
-  op: "message",
-  datatype: "dummy",
-  topic: "/foo",
-  receiveTime: { sec: 0, nsec: 0 },
-  message: { data: imageData },
-};
 
 function makeLines(xOffset: number) {
   return [
@@ -189,11 +203,19 @@ const markers = [
   }),
 ];
 
+const noMarkersMarkerData = {
+  markers: [],
+  cameraInfo: null,
+  scale: 1,
+  transformMarkers: false,
+};
+
 const topics = ["/camera_front_medium/image_rect_color_compressed", "/storybook_image"];
+const config = getGlobalHooks().perPanelHooks().ImageView.defaultConfig;
 
 function RGBStory({ encoding }: { encoding: string }) {
-  const width = 256;
-  const height = 200;
+  const width = 2560;
+  const height = 2000;
   const data = new Uint8Array(3 * height * width);
   let idx = 0;
   for (let row = 0; row < height; row++) {
@@ -216,14 +238,16 @@ function RGBStory({ encoding }: { encoding: string }) {
         receiveTime: { sec: 0, nsec: 0 },
         message: { data, width, height, encoding },
       }}
-      markerData={null}
+      rawMarkerData={noMarkersMarkerData}
+      config={config}
+      saveConfig={noop}
     />
   );
 }
 
 function BayerStory({ encoding }: { encoding: string }) {
-  const width = 256;
-  const height = 200;
+  const width = 2560;
+  const height = 2000;
   const data = new Uint8Array(height * width);
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
@@ -256,14 +280,16 @@ function BayerStory({ encoding }: { encoding: string }) {
         receiveTime: { sec: 0, nsec: 0 },
         message: { data, width, height, encoding },
       }}
-      markerData={null}
+      rawMarkerData={noMarkersMarkerData}
+      config={config}
+      saveConfig={noop}
     />
   );
 }
 
 function Mono16Story({ bigEndian }: { bigEndian: boolean }) {
-  const width = 200;
-  const height = 100;
+  const width = 2000;
+  const height = 1000;
   const data = new Uint8Array(width * height * 2);
   const view = new DataView(data.buffer);
   for (let r = 0; r < height; r++) {
@@ -282,7 +308,9 @@ function Mono16Story({ bigEndian }: { bigEndian: boolean }) {
         receiveTime: { sec: 0, nsec: 0 },
         message: { data, width, height, encoding: "16UC1", is_bigendian: 0 },
       }}
-      markerData={null}
+      rawMarkerData={noMarkersMarkerData}
+      config={config}
+      saveConfig={noop}
     />
   );
 }
@@ -290,42 +318,103 @@ function Mono16Story({ bigEndian }: { bigEndian: boolean }) {
 storiesOf("<ImageCanvas>", module)
   .addDecorator(withScreenshot())
   .add("markers", () => (
-    <div>
-      <h2>original markers</h2>
-      <ImageCanvas
-        topic={topics[0]}
-        image={imageMessage}
-        markerData={{
-          markers,
-          cameraModel: null,
-          originalWidth: null,
-          originalHeight: null,
-        }}
-      />
-      <br />
-      <h2>transformed markers</h2>
-      <ImageCanvas
-        topic={topics[1]}
-        image={imageMessage}
-        markerData={{
-          markers,
-          cameraModel: new CameraModel(cameraInfo),
-          originalWidth: null,
-          originalHeight: null,
-        }}
-      />
-      <h2>markers with different original image size</h2>
-      <ImageCanvas
-        topic={topics[1]}
-        image={imageMessage}
-        markerData={{
-          markers,
-          cameraModel: new CameraModel(cameraInfo),
-          originalWidth: 200,
-          originalHeight: 150,
-        }}
-      />
-    </div>
+    <LoadImageMessage>
+      {(imageMessage) => (
+        <div>
+          <h2>original markers</h2>
+          <ImageCanvas
+            topic={topics[0]}
+            image={imageMessage}
+            rawMarkerData={{
+              markers,
+              cameraInfo: null,
+              scale: 1,
+              transformMarkers: false,
+            }}
+            config={config}
+            saveConfig={noop}
+          />
+          <br />
+          <h2>transformed markers</h2>
+          <ImageCanvas
+            topic={topics[1]}
+            image={imageMessage}
+            rawMarkerData={{
+              markers,
+              cameraInfo,
+              scale: 1,
+              transformMarkers: true,
+            }}
+            config={config}
+            saveConfig={noop}
+          />
+          <h2>markers with different original image size</h2>
+          <ImageCanvas
+            topic={topics[1]}
+            image={imageMessage}
+            rawMarkerData={{
+              markers,
+              cameraInfo: { ...cameraInfo, width: 200, height: 150 },
+              scale: 1,
+              transformMarkers: true,
+            }}
+            config={config}
+            saveConfig={noop}
+          />
+        </div>
+      )}
+    </LoadImageMessage>
+  ))
+  .add("Markers with fallback rendering using the main thread", () => (
+    <LoadImageMessage>
+      {(imageMessage) => (
+        <div>
+          <h2>original markers</h2>
+          <ImageCanvas
+            topic={topics[0]}
+            image={imageMessage}
+            rawMarkerData={{
+              markers,
+              cameraInfo: null,
+              scale: 1,
+              transformMarkers: false,
+            }}
+            config={config}
+            saveConfig={noop}
+            useMainThreadRenderingForTesting
+          />
+          <br />
+          <h2>transformed markers</h2>
+          <ImageCanvas
+            topic={topics[1]}
+            image={imageMessage}
+            rawMarkerData={{
+              markers,
+              cameraInfo,
+              scale: 1,
+              transformMarkers: true,
+            }}
+            config={config}
+            saveConfig={noop}
+            useMainThreadRenderingForTesting
+          />
+          <h2>markers with different original image size</h2>
+          <ImageCanvas
+            topic={topics[1]}
+            image={imageMessage}
+            rawMarkerData={{
+              markers,
+              cameraInfo: { ...cameraInfo, width: 200, height: 150 },
+              scale: 1,
+              transformMarkers: true,
+            }}
+            config={config}
+            saveConfig={noop}
+            useMainThreadRenderingForTesting
+          />
+        </div>
+      )}
+    </LoadImageMessage>
   ))
   .add("error state", () => {
     return (
@@ -338,7 +427,9 @@ storiesOf("<ImageCanvas>", module)
           receiveTime: { sec: 0, nsec: 0 },
           message: { data: new Uint8Array([]), width: 100, height: 50, encoding: "Foo" },
         }}
-        markerData={null}
+        rawMarkerData={noMarkersMarkerData}
+        config={config}
+        saveConfig={noop}
       />
     );
   })

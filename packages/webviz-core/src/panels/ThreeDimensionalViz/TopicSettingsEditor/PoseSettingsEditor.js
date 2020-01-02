@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -10,7 +10,8 @@ import CheckboxBlankOutlineIcon from "@mdi/svg/svg/checkbox-blank-outline.svg";
 import CheckboxMarkedIcon from "@mdi/svg/svg/checkbox-marked.svg";
 import React from "react";
 
-import { SLabel, SInput, type TopicSettingsEditorProps } from ".";
+import { type TopicSettingsEditorProps } from ".";
+import { SLabel, SInput } from "./common";
 import Flex from "webviz-core/src/components/Flex";
 import type { PoseStamped } from "webviz-core/src/types/Messages";
 
@@ -46,9 +47,9 @@ export default function PoseSettingsEditor(props: TopicSettingsEditorProps<PoseS
       />
     </Flex>
   );
-  const currentShaftWidth = settings.size && settings.size.shaftWidth != null ? settings.size.shaftWidth : 2;
-  const currentHeadWidth = settings.size && settings.size.headWidth != null ? settings.size.headWidth : 2;
-  const currentHeadLength = settings.size && settings.size.headLength != null ? settings.size.headLength : 0.1;
+  const currentShaftWidth = settings.size?.shaftWidth ?? 2;
+  const currentHeadWidth = settings.size?.headWidth ?? 2;
+  const currentHeadLength = settings.size?.headLength ?? 0.1;
   const colorInputFields = (
     <Flex col>
       <SLabel>Color (r,g,b,a)</SLabel>

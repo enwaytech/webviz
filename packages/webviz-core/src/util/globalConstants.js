@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -8,16 +8,20 @@
 import { colors } from "webviz-core/src/util/colors";
 
 // URL params
+// DANGER: if you change this you break existing urls
 export const REMOTE_BAG_URL_QUERY_KEY = "remote-bag-url";
+export const ROSBRIDGE_WEBSOCKET_URL_QUERY_KEY = "rosbridge-websocket-url";
 export const LOAD_ENTIRE_BAG_QUERY_KEY = "load-entire-bag";
 export const MEASURE_DATA_PROVIDERS_QUERY_KEY = "_measureDataProviders";
-export const PANEL_PERF_QUERY_KEY = "_panelperf";
 export const DEMO_QUERY_KEY = "demo";
-export const AUTOPLAY_QUERY_KEY = "autoplay";
-export const ENABLE_NODE_PLAYGROUND_QUERY_KEY = "enable-node-playground";
+export const SEEK_TO_QUERY_KEY = "seek-to";
+export const LAYOUT_QUERY_KEY = "layout";
+export const LAYOUT_URL_QUERY_KEY = "layout-url";
+export const PATCH_LAYOUT_QUERY_KEY = "layout-patch";
+export const OLD_GLOBAL_VARIABLES_QUERY_KEY = "global-data";
+export const GLOBAL_VARIABLES_QUERY_KEY = "global-variables";
 
-export const DEFAULT_WEBVIZ_NODE_PREFIX = "/custom_node/";
-export const DEFAULT_WEBVIZ_NODE_NAME = "my_webviz_node";
+export const DEFAULT_WEBVIZ_NODE_PREFIX = "/webviz_node/";
 
 export const TRANSFORM_TOPIC = "/tf";
 export const DIAGNOSTIC_TOPIC = "/diagnostics";
@@ -27,6 +31,8 @@ export const SECOND_BAG_PREFIX = "/webviz_bag_2";
 export const POINT_CLOUD_DATATYPE = "sensor_msgs/PointCloud2";
 export const POSE_STAMPED_DATATYPE = "geometry_msgs/PoseStamped";
 export const LASER_SCAN_DATATYPE = "sensor_msgs/LaserScan";
+
+export const USER_ERROR_PREFIX = "[WEBVIZ USER ERROR]";
 
 export const COLORS = {
   RED: { r: 1.0, g: 0.2, b: 0.2, a: 1.0 },
@@ -57,6 +63,7 @@ export const MARKER_MSG_TYPES = {
   TEXT_VIEW_FACING: 9,
   MESH_RESOURCE: 10,
   TRIANGLE_LIST: 11,
+  INSTANCED_LINE_LIST: 108,
 };
 
 export const POSE_MARKER_SCALE = { x: 2, y: 2, z: 0.1 };
@@ -66,7 +73,7 @@ export const MILES_PER_HOUR_TO_METERS_PER_SECOND = 0.44703;
 export const METERS_PER_SECOND_TO_MILES_PER_HOUR = 2.23694;
 
 export const jsonTreeTheme = {
-  base00: colors.DARK2, // bg
+  base00: "transparent", // bg
   base07: colors.BLUEL1, // text
   base0B: colors.YELLOW1, // string & date, item string
   base09: colors.REDL1, // # & boolean

@@ -1,12 +1,11 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
-import { action } from "@storybook/addon-actions";
 import { storiesOf } from "@storybook/react";
 import { createMemoryHistory } from "history";
 import React from "react";
@@ -26,7 +25,7 @@ storiesOf("<AppMenu>", module)
       <div style={{ margin: 30, paddingLeft: 300 }}>
         <Provider store={configureStore(createRootReducer(createMemoryHistory()))}>
           <DragDropContextProvider backend={HTML5Backend}>
-            <AppMenu onPanelSelect={action("onPanelSelect")} defaultIsOpen />
+            <AppMenu defaultIsOpen />
           </DragDropContextProvider>
         </Provider>
       </div>

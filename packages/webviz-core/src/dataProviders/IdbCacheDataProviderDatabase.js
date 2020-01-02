@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -9,7 +9,7 @@
 import Database from "webviz-core/src/util/indexeddb/Database";
 import { updateMetaDatabases } from "webviz-core/src/util/indexeddb/MetaDatabase";
 
-const MAX_DATABASES = 3;
+const MAX_DATABASES = 6;
 const DATABASE_NAME_PREFIX = "IdbCacheDataProviderDb-";
 const META_DATABASE_NAME = "IdbCacheDataProviderMetaDb";
 const DATABASE_VERSION = 1;

@@ -1,11 +1,12 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
+import ClipboardOutlineIcon from "@mdi/svg/svg/clipboard-outline.svg";
 import cx from "classnames";
 import React, { PureComponent } from "react";
 import { hot } from "react-hot-loader/root";
@@ -14,12 +15,13 @@ import VirtualizedSelect from "react-virtualized-select";
 import { createSelector } from "reselect";
 
 import helpContent from "./index.help.md";
-import style from "./index.module.scss";
+import styles from "./index.module.scss";
 import LevelToString, { KNOWN_LOG_LEVELS } from "./LevelToString";
 import LogMessage from "./LogMessage";
 import logStyle from "./LogMessage.module.scss";
 import Flex from "webviz-core/src/components/Flex";
-import LargeList from "webviz-core/src/components/LargeList";
+import Icon from "webviz-core/src/components/Icon";
+import LogList from "webviz-core/src/components/LogList";
 import MessageHistory, {
   type MessageHistoryData,
   type MessageHistoryItem,
@@ -27,6 +29,7 @@ import MessageHistory, {
 import Panel from "webviz-core/src/components/Panel";
 import PanelToolbar from "webviz-core/src/components/PanelToolbar";
 import type { Message } from "webviz-core/src/players/types";
+import clipboard from "webviz-core/src/util/clipboard";
 
 // Remove creatable warning https://github.com/JedWatson/react-select/issues/2181
 class Creatable extends React.Component<{}, {}> {
@@ -81,17 +84,9 @@ export const getShouldDisplayMsg = (msg: Message, minLogLevel: number, searchTer
   return false;
 };
 
-type State = {
-  disableAutoScroll: boolean,
-};
-
-const DEFAULT_CONFIG = { searchTerms: [], minLogLevel: 1 };
-class RosoutPanel extends PureComponent<Props, State> {
-  static defaultConfig = DEFAULT_CONFIG;
+class RosoutPanel extends PureComponent<Props> {
+  static defaultConfig = { searchTerms: [], minLogLevel: 1 };
   static panelType = "RosOut";
-  _prevConfig: Config = DEFAULT_CONFIG;
-
-  state = { disableAutoScroll: false };
 
   _onNodeFilterChange = (selectedOptions: Option[]) => {
     this.props.saveConfig({ ...this.props.config, searchTerms: selectedOptions.map((option) => option.value) });
@@ -114,19 +109,19 @@ class RosoutPanel extends PureComponent<Props, State> {
     return items.filter(this._filterFn);
   }
 
-  _renderFiltersBar = (seenNodeNames: Set<string>) => {
+  _renderFiltersBar = (seenNodeNames: Set<string>, msgs: MessageHistoryItem[]) => {
     const { minLogLevel, searchTerms } = this.props.config;
     const nodeNameOptions = Array.from(seenNodeNames).map((name) => ({ label: name, value: name }));
 
     return (
-      <div className={style.filtersBar}>
+      <div className={styles.filtersBar}>
         <VirtualizedSelect
-          className={cx(style.severityFilter)}
+          className={cx(styles.severityFilter)}
           clearable={false}
           searchable={false}
           value={minLogLevel}
-          optionHeight={parseInt(style.optionHeight)}
-          maxHeight={parseInt(style.optionHeight) * KNOWN_LOG_LEVELS.length}
+          optionHeight={parseInt(styles.optionHeight)}
+          maxHeight={parseInt(styles.optionHeight) * KNOWN_LOG_LEVELS.length}
           options={LOG_LEVEL_OPTIONS}
           optionRenderer={({ key, style: styleProp, option, selectValue, focusedOption }) => (
             <div
@@ -142,25 +137,36 @@ class RosoutPanel extends PureComponent<Props, State> {
           valueComponent={(option) => <span>{`Min Severity: ${LevelToString(option.value.value)}`}</span>}
         />
         <VirtualizedSelect
-          className={style.nodeFilter}
+          className={styles.nodeFilter}
           clearable
           multi
           closeOnSelect={false}
           value={stringsToOptions(searchTerms)}
           onChange={this._onNodeFilterChange}
           options={nodeNameOptions}
-          optionHeight={parseInt(style.optionHeight)}
+          optionHeight={parseInt(styles.optionHeight)}
           placeholder="Filter by node name or message text"
           searchable
           selectComponent={Creatable}
           promptTextCreator={(label) => `Node names or msgs containing "${label}"`}
         />
+        <div className={styles.itemsCountField}>
+          {msgs.length} {msgs.length === 1 ? "item" : "items"}
+          <Icon
+            style={{ padding: "1px 0px 0px 6px" }}
+            onClick={() => {
+              clipboard.copy(JSON.stringify(msgs, null, 2));
+            }}
+            tooltip="Copy rosout to clipboard">
+            <ClipboardOutlineIcon />
+          </Icon>
+        </div>
       </div>
     );
   };
-  _renderRow({ item, style, key }) {
+  _renderRow({ item, style, key, index }) {
     return (
-      <div key={key} style={style}>
+      <div key={key} style={index === 0 ? { ...style, paddingTop: 36 } : style}>
         <LogMessage msg={item.message.message} />
       </div>
     );
@@ -168,37 +174,19 @@ class RosoutPanel extends PureComponent<Props, State> {
 
   render() {
     const seenNodeNames = new Set();
-    const { disableAutoScroll } = this.state;
-
     return (
       <MessageHistory paths={["/rosout"]} historySize={100000}>
-        {({ itemsByPath, cleared }: MessageHistoryData) => {
-          const msgs = itemsByPath["/rosout"];
+        {({ itemsByPath }: MessageHistoryData) => {
+          const msgs: MessageHistoryItem[] = itemsByPath["/rosout"];
           msgs.forEach((msg) => seenNodeNames.add(msg.message.message.name));
-          const configChanged = this._prevConfig !== this.props.config;
-          this._prevConfig = this.props.config;
 
           return (
-            <Flex className={style.message} col>
+            <Flex col>
               <PanelToolbar floating helpContent={helpContent}>
-                {this._renderFiltersBar(seenNodeNames)}
+                {this._renderFiltersBar(seenNodeNames, msgs)}
               </PanelToolbar>
-              <div
-                className={style.content}
-                onScroll={({ target }) => {
-                  const newDisableAutoScroll = target.scrollHeight - target.scrollTop > target.clientHeight;
-                  if (newDisableAutoScroll !== disableAutoScroll) {
-                    this.setState({ disableAutoScroll: newDisableAutoScroll });
-                  }
-                }}>
-                <LargeList
-                  disableScrollToBottom={disableAutoScroll}
-                  cleared={cleared || configChanged}
-                  items={this._getFilteredMessages(msgs)}
-                  renderRow={this._renderRow}
-                  copyButtonTooltip="Copy rosout to clipboard"
-                  enableCopying
-                />
+              <div className={styles.content}>
+                <LogList items={this._getFilteredMessages(msgs)} renderRow={this._renderRow} />
               </div>
             </Flex>
           );

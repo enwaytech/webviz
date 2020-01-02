@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -15,7 +15,7 @@ import { importPanelLayout } from "webviz-core/src/actions/panels";
 import ShareJsonModal from "webviz-core/src/components/ShareJsonModal";
 
 const onLayoutChange = (layout: any, isFromUrl: boolean = false) => {
-  importPanelLayout(layout, isFromUrl);
+  importPanelLayout(layout, { isFromUrl });
 };
 
 storiesOf("<ShareJsonModal>", module)

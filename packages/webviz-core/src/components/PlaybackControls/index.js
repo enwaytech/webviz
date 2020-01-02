@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -11,23 +11,22 @@ import CancelIcon from "@mdi/svg/svg/cancel.svg";
 import PauseIcon from "@mdi/svg/svg/pause.svg";
 import PlayIcon from "@mdi/svg/svg/play.svg";
 import classnames from "classnames";
-import * as React from "react";
+import React, { useCallback } from "react";
 import KeyListener from "react-key-listener";
 import type { Time } from "rosbag";
 import styled from "styled-components";
 
 import styles from "./index.module.scss";
 import { ProgressPlot } from "./ProgressPlot";
-import Dropdown from "webviz-core/src/components/Dropdown";
 import EmptyState from "webviz-core/src/components/EmptyState";
 import Flex from "webviz-core/src/components/Flex";
 import Icon from "webviz-core/src/components/Icon";
 import { MessagePipelineConsumer } from "webviz-core/src/components/MessagePipeline";
+import PlaybackSpeedControls from "webviz-core/src/components/PlaybackSpeedControls";
 import Slider from "webviz-core/src/components/Slider";
 import tooltipStyles from "webviz-core/src/components/Tooltip.module.scss";
-import { type PlayerState, PlayerCapabilities } from "webviz-core/src/players/types";
+import { type PlayerState } from "webviz-core/src/players/types";
 import colors from "webviz-core/src/styles/colors.module.scss";
-import { times } from "webviz-core/src/util/entities";
 import { formatTime, formatTimeRaw, subtractTimes, toSec, fromSec } from "webviz-core/src/util/time";
 
 const StyledFullWidthBar = styled.div`
@@ -54,7 +53,6 @@ type Props = {|
   player: PlayerState,
   pause: () => void,
   play: () => void,
-  setSpeed: (number) => void,
   seek: (Time) => void,
 |};
 
@@ -125,16 +123,17 @@ export class UnconnectedPlaybackControls extends React.PureComponent<Props> {
   };
 
   render() {
-    const { pause, play, setSpeed, player } = this.props;
-    const { activeData, showInitializing, progress, capabilities } = player;
+    const { pause, play, player } = this.props;
+    const { activeData, showInitializing, progress } = player;
 
     if (!activeData) {
       const message = showInitializing ? (
         "Player is initializing..."
       ) : (
         <span>
-          Drop a <a href="http://wiki.ros.org/ROS/Tutorials/Recording%20and%20playing%20back%20data">ROS bag file</a> to
-          get started. Or check out <a href="/worldview">Worldview</a> and other packages on{" "}
+          Drop a <a href="http://wiki.ros.org/ROS/Tutorials/Recording%20and%20playing%20back%20data">ROS bag file</a> or
+          connect to a <a href="http://wiki.ros.org/rosbridge_suite/Tutorials/RunningRosbridge">rosbridge</a> to get
+          started. Or check out <a href="/worldview">Worldview</a> and other packages on{" "}
           <a href="https://github.com/cruise-automation">GitHub</a>!
         </span>
       );
@@ -148,7 +147,7 @@ export class UnconnectedPlaybackControls extends React.PureComponent<Props> {
       );
     }
 
-    const { isPlaying, startTime, endTime, currentTime, speed } = activeData;
+    const { isPlaying, startTime, endTime, currentTime } = activeData;
 
     const min = toSec(startTime);
     const max = toSec(endTime);
@@ -162,14 +161,7 @@ export class UnconnectedPlaybackControls extends React.PureComponent<Props> {
           <Icon large>{isPlaying ? <PauseIcon /> : <PlayIcon />}</Icon>
         </div>
         <div>
-          {capabilities.includes(PlayerCapabilities.setSpeed) && speed != null && speed !== 0 && (
-            <Dropdown position="above" value={speed} text={`${speed.toFixed(1)}${times}`} onChange={setSpeed}>
-              <span value={0.1}>0.1&times;</span>
-              <span value={0.2}>0.2&times;</span>
-              <span value={0.5}>0.5&times;</span>
-              <span value={1}>1.0&times;</span>
-            </Dropdown>
-          )}
+          <PlaybackSpeedControls />
         </div>
 
         <div className={styles.bar}>
@@ -190,7 +182,7 @@ export class UnconnectedPlaybackControls extends React.PureComponent<Props> {
               value={value}
               draggable
               onChange={this.onChange}
-              renderSlider={(value) => (value == null ? null : <StyledMarker width={value} />)}
+              renderSlider={(val) => (val == null ? null : <StyledMarker width={val} />)}
             />
           </div>
         </div>
@@ -199,18 +191,19 @@ export class UnconnectedPlaybackControls extends React.PureComponent<Props> {
   }
 }
 
-export default function PlaybackControls() {
-  return (
-    <MessagePipelineConsumer>
-      {(context) => (
-        <UnconnectedPlaybackControls
-          player={context.playerState}
-          play={context.startPlayback}
-          pause={context.pausePlayback}
-          seek={context.seekPlayback}
-          setSpeed={context.setPlaybackSpeed}
-        />
-      )}
-    </MessagePipelineConsumer>
+function PlaybackControls() {
+  const renderUnconnectedPlaybackControls = useCallback(
+    (context) => (
+      <UnconnectedPlaybackControls
+        player={context.playerState}
+        play={context.startPlayback}
+        pause={context.pausePlayback}
+        seek={context.seekPlayback}
+      />
+    ),
+    []
   );
+  return <MessagePipelineConsumer>{renderUnconnectedPlaybackControls}</MessagePipelineConsumer>;
 }
+
+export default PlaybackControls;

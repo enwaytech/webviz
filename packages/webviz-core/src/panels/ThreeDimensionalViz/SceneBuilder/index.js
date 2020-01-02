@@ -1,11 +1,11 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
-import { some } from "lodash";
+import { some, mapValues } from "lodash";
 import type { Time } from "rosbag";
 
 import { getGlobalHooks } from "webviz-core/src/loadWebviz";
@@ -20,8 +20,9 @@ import type { Topic, Frame, Message } from "webviz-core/src/players/types";
 import type { Marker, Namespace, OccupancyGridMessage, Pose } from "webviz-core/src/types/Messages";
 import type { MarkerProvider, MarkerCollector, Scene } from "webviz-core/src/types/Scene";
 import Bounds from "webviz-core/src/util/Bounds";
-import { POINT_CLOUD_DATATYPE, POSE_STAMPED_DATATYPE, POSE_MARKER_SCALE } from "webviz-core/src/util/globalConstants";
+import { POSE_MARKER_SCALE } from "webviz-core/src/util/globalConstants";
 import { emptyPose } from "webviz-core/src/util/Pose";
+import reportError from "webviz-core/src/util/reportError";
 import { fromSec } from "webviz-core/src/util/time";
 
 export type TopicSettingsCollection = {
@@ -50,10 +51,16 @@ export type ErrorDetails = {| frameIds: Set<string>, namespaces: Set<string> |};
 export type SceneErrors = {
   topicsMissingFrameIds: Map<string, ErrorDetails>,
   topicsMissingTransforms: Map<string, ErrorDetails>,
+  topicsWithBadFrameIds: Map<string, ErrorDetails>,
   topicsWithError: Map<string, string>,
   rootTransformID: string,
 };
 
+type SceneErrorTopics = {
+  topicsWithBadFrameIds: Set<string>,
+};
+
+type SelectedNamespacesByTopic = { [topicName: string]: string[] };
 // constructs a scene containing all objects to be rendered
 // by consuming visualization topics from frames
 export default class SceneBuilder implements MarkerProvider {
@@ -67,17 +74,24 @@ export default class SceneBuilder implements MarkerProvider {
     rootTransformID: "",
     topicsMissingFrameIds: new Map(),
     topicsMissingTransforms: new Map(),
+    topicsWithBadFrameIds: new Map(),
     topicsWithError: new Map(),
+  };
+  reportedErrorTopics: SceneErrorTopics = {
+    topicsWithBadFrameIds: new Set(),
   };
   maps = [];
   flattenedZHeightPose: ?Pose = null;
   scene = {};
   collectors: { [string]: MessageCollector } = {};
   _clock: Time;
+  _playerId: ?string = null;
   _topicSettings: TopicSettingsCollection = {};
 
   allNamespaces: Namespace[] = [];
+  // TODO(Audrey): remove enabledNamespaces once we release topic groups
   enabledNamespaces: Namespace[] = [];
+  selectedNamespacesByTopic: ?{ [topicName: string]: Set<string> };
   flatten: boolean = false;
   bounds: Bounds = new Bounds();
 
@@ -102,6 +116,13 @@ export default class SceneBuilder implements MarkerProvider {
         collector.flush();
       }
     }
+  }
+
+  setPlayerId(playerId: string) {
+    if (this._playerId !== playerId) {
+      this.reportedErrorTopics.topicsWithBadFrameIds.clear();
+    }
+    this._playerId = playerId;
   }
 
   setTopicSettings(settings: TopicSettingsCollection) {
@@ -140,11 +161,15 @@ export default class SceneBuilder implements MarkerProvider {
     this.enabledNamespaces = namespaces;
   }
 
-  setGlobalData = (globalData: any = {}) => {
+  setSelectedNamespacesByTopic(selectedNamespacesByTopic: SelectedNamespacesByTopic) {
+    this.selectedNamespacesByTopic = mapValues(selectedNamespacesByTopic, (namespaces) => new Set(namespaces));
+  }
+
+  setGlobalVariables = (globalVariables: any = {}) => {
     const { selectionState, topicsToRender } = getGlobalHooks()
       .perPanelHooks()
-      .ThreeDimensionalViz.setGlobalDataInSceneBuilder(
-        globalData,
+      .ThreeDimensionalViz.setGlobalVariablesInSceneBuilder(
+        globalVariables,
         this.selectionState,
         this.topicsToRender,
         this.topics
@@ -154,8 +179,13 @@ export default class SceneBuilder implements MarkerProvider {
   };
 
   hasErrors() {
-    const { topicsMissingFrameIds, topicsMissingTransforms, topicsWithError } = this.errors;
-    return topicsMissingFrameIds.size !== 0 || topicsMissingTransforms.size !== 0 || topicsWithError.size !== 0;
+    const { topicsMissingFrameIds, topicsMissingTransforms, topicsWithBadFrameIds, topicsWithError } = this.errors;
+    return (
+      topicsMissingFrameIds.size !== 0 ||
+      topicsMissingTransforms.size !== 0 ||
+      topicsWithBadFrameIds.size !== 0 ||
+      topicsWithError.size !== 0
+    );
   }
 
   _addError(map: Map<string, ErrorDetails>, topic: string): ErrorDetails {
@@ -177,7 +207,25 @@ export default class SceneBuilder implements MarkerProvider {
 
   // Only public for tests.
   namespaceIsEnabled(topic: string, name: string) {
+    if (this.selectedNamespacesByTopic) {
+      // enable all namespaces under a topic if it's not already set
+      return (
+        (this.selectedNamespacesByTopic[topic] && this.selectedNamespacesByTopic[topic].has(name)) ||
+        this.selectedNamespacesByTopic[topic] == null
+      );
+    }
     return some(this.enabledNamespaces, (ns) => ns.topic === topic && ns.name === name);
+  }
+
+  _reportBadFrameId(topic: string) {
+    if (!this.reportedErrorTopics.topicsWithBadFrameIds.has(topic)) {
+      this.reportedErrorTopics.topicsWithBadFrameIds.add(topic);
+      reportError(
+        `Topic ${topic} has bad frame`,
+        "Non-root transforms may be out of sync, since webviz uses the latest transform message instead of the one matching header.stamp",
+        "user"
+      );
+    }
   }
 
   _transformAndCloneMarker = (topic: string, marker: Marker) => {
@@ -187,6 +235,14 @@ export default class SceneBuilder implements MarkerProvider {
       const error = this._addError(this.errors.topicsMissingFrameIds, topic);
       error.namespaces.add(marker.ns);
       return null;
+    }
+
+    if (frame_id !== this.rootTransformID) {
+      this._reportBadFrameId(topic);
+      const error = this._addError(this.errors.topicsWithBadFrameIds, topic);
+      error.namespaces.add(marker.ns);
+      error.frameIds.add(frame_id);
+      // We continue to render these, though they may be inaccurate
     }
 
     const sourcePose = marker.pose;
@@ -293,6 +349,12 @@ export default class SceneBuilder implements MarkerProvider {
       return;
     }
 
+    if (frame_id !== this.rootTransformID) {
+      this._reportBadFrameId(topic);
+      const error = this._addError(this.errors.topicsWithBadFrameIds, topic);
+      error.frameIds.add(frame_id);
+    }
+
     let pose = emptyPose();
     pose = this.transforms.apply(pose, pose, frame_id, this.rootTransformID);
     if (!pose) {
@@ -386,29 +448,30 @@ export default class SceneBuilder implements MarkerProvider {
 
   _consumeMessage = (topic: string, msg: Message): void => {
     const { message, datatype } = msg;
+    const SUPPORTED_MARKER_DATATYPES = getGlobalHooks().perPanelHooks().ThreeDimensionalViz.SUPPORTED_MARKER_DATATYPES;
 
     switch (datatype) {
-      case "visualization_msgs/Marker":
+      case SUPPORTED_MARKER_DATATYPES.VISUALIZATION_MSGS_MARKER_DATATYPE:
         this._consumeMarker(topic, message);
         break;
-      case "visualization_msgs/MarkerArray":
+      case SUPPORTED_MARKER_DATATYPES.VISUALIZATION_MSGS_MARKER_ARRAY_DATATYPE:
         this._consumeMarkerArray(topic, message);
         break;
-      case POSE_STAMPED_DATATYPE:
+      case SUPPORTED_MARKER_DATATYPES.POSE_STAMPED_DATATYPE:
         // make synthetic arrow marker from the stamped pose
         this.collectors[topic].addMessage(topic, buildSyntheticArrowMarker(msg, this.flattenedZHeightPose));
         break;
-      case "nav_msgs/OccupancyGrid":
+      case SUPPORTED_MARKER_DATATYPES.NAV_MSGS_OCCUPANCY_GRID_DATATYPE:
         // flatten btn: set empty z values to be at the same level as the flattenedZHeightPose
         this._consumeOccupancyGrid(topic, message);
         break;
-      case POINT_CLOUD_DATATYPE:
+      case SUPPORTED_MARKER_DATATYPES.POINT_CLOUD_DATATYPE:
         this._consumeNonMarkerMessage(topic, message, 102);
         break;
-      case "sensor_msgs/LaserScan":
+      case SUPPORTED_MARKER_DATATYPES.SENSOR_MSGS_LASER_SCAN_DATATYPE:
         this._consumeNonMarkerMessage(topic, message, 104);
         break;
-      case "geometry_msgs/PolygonStamped": {
+      case SUPPORTED_MARKER_DATATYPES.GEOMETRY_MSGS_POLYGON_STAMPED_DATATYPE: {
         // convert Polygon to a line strip
         const { polygon } = message;
         if (polygon.points.length === 0) {
@@ -449,6 +512,7 @@ export default class SceneBuilder implements MarkerProvider {
 
     this.errors.topicsMissingFrameIds.delete(topic);
     this.errors.topicsMissingTransforms.delete(topic);
+    this.errors.topicsWithBadFrameIds.delete(topic);
     this.errors.topicsWithError.delete(topic);
     this.collectors[topic] = this.collectors[topic] || new MessageCollector();
     this.collectors[topic].setClock(this._clock);
@@ -538,6 +602,7 @@ export default class SceneBuilder implements MarkerProvider {
       case 103: return add.poseMarker(marker);
       case 104: return add.laserScan(marker);
       case 107: return add.filledPolygon(marker);
+      case 108: return add.instancedLineList(marker);
       default: {
         getGlobalHooks()
           .perPanelHooks()

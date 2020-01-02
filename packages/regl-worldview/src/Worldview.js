@@ -62,7 +62,12 @@ type State = {|
   worldviewContext: WorldviewContext,
 |};
 
-function handleWorldviewMouseInteraction(objects: MouseEventObject[], ray: Ray, e: MouseEvent, handler: MouseHandler) {
+function handleWorldviewMouseInteraction(
+  objects: MouseEventObject[],
+  ray: Ray,
+  e: SyntheticMouseEvent<HTMLCanvasElement>,
+  handler: MouseHandler
+) {
   const args = { ray, objects };
 
   try {
@@ -153,25 +158,35 @@ export class WorldviewBase extends React.Component<BaseProps, State> {
     if (!this._tick) {
       this._tick = requestAnimationFrame(() => {
         this._tick = undefined;
-        worldviewContext.paint();
+        try {
+          worldviewContext.paint();
+        } catch (error) {
+          // Regl automatically tries to reconnect when losing the canvas 3d context.
+          // We should log this error, but it's not important to throw it.
+          if (error.message === "(regl) context lost") {
+            console.warn(error);
+          } else {
+            throw error;
+          }
+        }
       });
     }
   }
 
-  _onDoubleClick = (e: MouseEvent) => {
+  _onDoubleClick = (e: SyntheticMouseEvent<HTMLCanvasElement>) => {
     this._onMouseInteraction(e, "onDoubleClick");
   };
 
-  _onMouseDown = (e: MouseEvent) => {
+  _onMouseDown = (e: SyntheticMouseEvent<HTMLCanvasElement>) => {
     this._dragStartPos = { x: e.clientX, y: e.clientY };
     this._onMouseInteraction(e, "onMouseDown");
   };
 
-  _onMouseMove = (e: MouseEvent) => {
+  _onMouseMove = (e: SyntheticMouseEvent<HTMLCanvasElement>) => {
     this._onMouseInteraction(e, "onMouseMove");
   };
 
-  _onMouseUp = (e: MouseEvent) => {
+  _onMouseUp = (e: SyntheticMouseEvent<HTMLCanvasElement>) => {
     this._onMouseInteraction(e, "onMouseUp");
     const { _dragStartPos } = this;
     if (_dragStartPos) {
@@ -185,7 +200,7 @@ export class WorldviewBase extends React.Component<BaseProps, State> {
     }
   };
 
-  _onMouseInteraction = (e: MouseEvent, mouseEventName: MouseEventEnum) => {
+  _onMouseInteraction = (e: SyntheticMouseEvent<HTMLCanvasElement>, mouseEventName: MouseEventEnum) => {
     const { worldviewContext } = this.state;
     const worldviewHandler = this.props[mouseEventName];
 
@@ -216,13 +231,16 @@ export class WorldviewBase extends React.Component<BaseProps, State> {
     worldviewContext
       .readHitmap(canvasX, canvasY, !!this.props.enableStackedObjectEvents, this.props.maxStackedObjectCount)
       .then((mouseEventsWithCommands) => {
-        if (worldviewHandler) {
-          const mouseEvents = mouseEventsWithCommands.map(([mouseEventObject]) => mouseEventObject);
-          handleWorldviewMouseInteraction(mouseEvents, ray, e, worldviewHandler);
-        }
         const mouseEventsByCommand: Map<Command, Array<MouseEventObject>> = aggregate(mouseEventsWithCommands);
         for (const [command, mouseEvents] of mouseEventsByCommand.entries()) {
           command.handleMouseEvent(mouseEvents, ray, e, mouseEventName);
+          if (e.isPropagationStopped()) {
+            break;
+          }
+        }
+        if (worldviewHandler && !e.isPropagationStopped()) {
+          const mouseEvents = mouseEventsWithCommands.map(([mouseEventObject]) => mouseEventObject);
+          handleWorldviewMouseInteraction(mouseEvents, ray, e, worldviewHandler);
         }
       })
       .catch((e) => {

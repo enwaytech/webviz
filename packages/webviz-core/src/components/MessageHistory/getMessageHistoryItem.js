@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -13,15 +13,15 @@ import {
   type MessagePathStructureItemMessage,
 } from ".";
 import { type RosPath, type MessagePathFilter } from "./internalCommon";
-import type { GlobalData } from "webviz-core/src/hooks/useGlobalData";
+import type { GlobalVariables } from "webviz-core/src/hooks/useGlobalVariables";
 import type { Message, Topic } from "webviz-core/src/players/types";
 import type { RosDatatypes } from "webviz-core/src/types/RosDatatypes";
 import { enumValuesByDatatypeAndField } from "webviz-core/src/util/selectors";
 
-function filterMatches(filter: MessagePathFilter, value: any, globalData: any) {
+function filterMatches(filter: MessagePathFilter, value: any, globalVariables: any) {
   let filterValue = filter.value;
   if (typeof filterValue === "object") {
-    filterValue = globalData[filterValue.variableName];
+    filterValue = globalVariables[filterValue.variableName];
   }
 
   let currentValue = value;
@@ -44,7 +44,7 @@ export default function getMessageHistoryItem(
   rosPath: RosPath,
   topic: Topic,
   datatypes: RosDatatypes,
-  globalData: GlobalData = {},
+  globalVariables: GlobalVariables = {},
   structures: { [string]: MessagePathStructureItemMessage }
 ): ?MessageHistoryItem {
   // We don't care about messages that don't match the topic we're looking for.
@@ -56,7 +56,7 @@ export default function getMessageHistoryItem(
   // will *always* return a history item, so this is our only chance to return nothing.
   for (const item of rosPath.messagePath) {
     if (item.type === "filter") {
-      if (!filterMatches(item, message.message, globalData)) {
+      if (!filterMatches(item, message.message, globalVariables)) {
         return undefined;
       }
     } else {
@@ -84,11 +84,7 @@ export default function getMessageHistoryItem(
           constantName = enumMap[fieldName][value];
         }
       }
-      queriedData.push({
-        value,
-        path,
-        constantName,
-      });
+      queriedData.push({ value, path, constantName });
     } else if (pathItem.type === "name" && structureItem.structureType === "message") {
       // If the `pathItem` is a name, we're traversing down using that name.
       traverse(
@@ -98,9 +94,17 @@ export default function getMessageHistoryItem(
         structureItem.nextByName[pathItem.name]
       );
     } else if (pathItem.type === "slice" && structureItem.structureType === "array") {
+      const { start, end } = pathItem;
+      const startIdx = typeof start === "object" ? globalVariables[start.variableName] : start;
+      const endIdx = typeof end === "object" ? globalVariables[end.variableName] : end;
+      if (isNaN(startIdx) || isNaN(endIdx)) {
+        return;
+      }
+
       // If the `pathItem` is a slice, iterate over all the relevant elements in the array.
-      for (let i = pathItem.start; i <= Math.min(pathItem.end, value.length - 1); i++) {
-        if (value[i] === undefined) {
+      for (let i = startIdx; i <= Math.min(endIdx, value.length - 1); i++) {
+        const index = i >= 0 ? i : value.length + i;
+        if (value[index] === undefined) {
           continue;
         }
         // Ideally show something like `/topic.object[:]{some_id=123}` for the path, but fall
@@ -111,18 +115,22 @@ export default function getMessageHistoryItem(
           // If we have a filter set after this, it will update the path appropriately.
           newPath = `${path}[:]`;
         } else {
-          // See if `value[i]` has a property that we typically filter on. If so, show that.
-          const name = Object.keys(value[i]).find((key) => isTypicalFilterName(key));
+          // See if `value[index]` has a property that we typically filter on. If so, show that.
+          const name = Object.keys(value[index]).find((key) => isTypicalFilterName(key));
           if (name) {
-            newPath = `${path}[:]{${name}==${value[i][name]}}`;
+            newPath = `${path}[:]{${name}==${value[index][name]}}`;
           } else {
+            // Use `i` here instead of `index`, since it's only different when `i` is negative,
+            // and in that case it's probably more useful to show to the user how many elements
+            // from the end of the array this data is, since they clearly are thinking in that way
+            // (otherwise they wouldn't have chosen a negative slice).
             newPath = `${path}[${i}]`;
           }
         }
-        traverse(value[i], pathIndex + 1, newPath, structureItem.next);
+        traverse(value[index], pathIndex + 1, newPath, structureItem.next);
       }
     } else if (pathItem.type === "filter") {
-      if (filterMatches(pathItem, value, globalData)) {
+      if (filterMatches(pathItem, value, globalVariables)) {
         traverse(value, pathIndex + 1, `${path}{${pathItem.repr}}`, structureItem);
       }
     } else {

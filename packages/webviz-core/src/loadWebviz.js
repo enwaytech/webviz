@@ -1,20 +1,23 @@
 /* eslint-disable header/header */
 
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
-import { routerMiddleware } from "connected-react-router";
+import memoize from "lodash/memoize";
 import React from "react";
 import ReactDOM from "react-dom";
+
+import { DIAGNOSTIC_TOPIC } from "./util/globalConstants";
 
 // We put all the internal requires inside functions, so that when they load the hooks have been properly set.
 
 const defaultHooks = {
   nodes: () => [],
   getDefaultGlobalStates() {
+    const { defaultPlaybackConfig } = require("webviz-core/src/reducers/panels");
     return {
       layout: {
         direction: "row",
@@ -28,35 +31,44 @@ const defaultHooks = {
         splitPercentage: 33.3333333333,
       },
       savedProps: {},
-      globalData: {},
+      globalVariables: {},
       userNodes: {},
       linkedGlobalVariables: [],
+      playbackConfig: defaultPlaybackConfig,
     };
   },
-  migratePanels: (panels) => panels,
+  migratePanels(panels) {
+    const migratePanels = require("webviz-core/src/util/migratePanels").default;
+    return migratePanels(panels);
+  },
   panelCategories() {
-    return [{ label: "General", key: "general" }, { label: "Utilities", key: "utilities" }];
+    return [
+      { label: "ROS", key: "ros" },
+      { label: "Utilities", key: "utilities" },
+      { label: "Debugging", key: "debugging" },
+    ];
   },
   panelsByCategory() {
-    const { ENABLE_NODE_PLAYGROUND_QUERY_KEY } = require("webviz-core/src/util/globalConstants");
-    const params = new URLSearchParams(window.location.search);
-    const nodePlaygroundEnabled = params.has(ENABLE_NODE_PLAYGROUND_QUERY_KEY);
-
+    const GlobalVariables = require("webviz-core/src/panels/GlobalVariables").default;
     const DiagnosticStatusPanel = require("webviz-core/src/panels/diagnostics/DiagnosticStatusPanel").default;
     const DiagnosticSummary = require("webviz-core/src/panels/diagnostics/DiagnosticSummary").default;
     const ImageViewPanel = require("webviz-core/src/panels/ImageView").default;
     const Internals = require("webviz-core/src/panels/Internals").default;
+    const NodePlayground = require("webviz-core/src/panels/NodePlayground").default;
+    const Note = require("webviz-core/src/panels/Note").default;
     const NumberOfRenders = require("webviz-core/src/panels/NumberOfRenders").default;
+    const PlaybackPerformance = require("webviz-core/src/panels/PlaybackPerformance").default;
     const Plot = require("webviz-core/src/panels/Plot").default;
+    const RawMessages = require("webviz-core/src/panels/RawMessages").default;
     const Rosout = require("webviz-core/src/panels/Rosout").default;
     const StateTransitions = require("webviz-core/src/panels/StateTransitions").default;
+    const SubscribeToList = require("webviz-core/src/panels/SubscribeToList").default;
+    const TwoDimensionalPlot = require("webviz-core/src/panels/TwoDimensionalPlot").default;
     const ThreeDimensionalViz = require("webviz-core/src/panels/ThreeDimensionalViz").default;
-    const RawMessages = require("webviz-core/src/panels/RawMessages").default;
-    const NodePlayground = require("webviz-core/src/panels/NodePlayground").default;
     const { ndash } = require("webviz-core/src/util/entities");
-    const Note = require("webviz-core/src/panels/Note").default;
 
-    const general = [
+    const ros = [
+      { title: "2D Plot", component: TwoDimensionalPlot },
       { title: "3D", component: ThreeDimensionalViz },
       { title: `Diagnostics ${ndash} Summary`, component: DiagnosticSummary },
       { title: `Diagnostics ${ndash} Detail`, component: DiagnosticStatusPanel },
@@ -65,46 +77,48 @@ const defaultHooks = {
       { title: "Raw Messages", component: RawMessages },
       { title: "rosout", component: Rosout },
       { title: "State Transitions", component: StateTransitions },
-      { title: "Number of Renders", component: NumberOfRenders, hideFromList: true },
     ];
 
     const utilities = [
-      nodePlaygroundEnabled ? { title: "Node Playground", component: NodePlayground } : null,
+      { title: "Global Variables", component: GlobalVariables },
+      { title: "Node Playground", component: NodePlayground },
       { title: "Notes", component: Note },
       { title: "Webviz Internals", component: Internals },
     ];
 
-    return { general, utilities };
+    const debugging = [
+      { title: "Number of Renders", component: NumberOfRenders },
+      { title: "Playback Performance", component: PlaybackPerformance },
+      { title: "Subscribe to List", component: SubscribeToList },
+    ];
+
+    return { ros, utilities, debugging };
   },
   helpPageFootnote: () => null,
-  perPanelHooks: () => {
-    const World = require("webviz-core/src/panels/ThreeDimensionalViz/World").default;
+  perPanelHooks: memoize(() => {
     const LaserScanVert = require("webviz-core/src/panels/ThreeDimensionalViz/LaserScanVert").default;
-    const FileMultipleIcon = require("@mdi/svg/svg/file-multiple.svg").default;
-    const CheckboxBlankCircleOutline = require("@mdi/svg/svg/checkbox-blank-circle-outline.svg").default;
     const { defaultMapPalette } = require("webviz-core/src/panels/ThreeDimensionalViz/commands/utils");
+    const { POINT_CLOUD_DATATYPE, POSE_STAMPED_DATATYPE } = require("webviz-core/src/util/globalConstants");
 
-    const { SECOND_BAG_PREFIX } = require("webviz-core/src/util/globalConstants");
+    const SUPPORTED_MARKER_DATATYPES = {
+      // generally supported datatypes
+      VISUALIZATION_MSGS_MARKER_DATATYPE: "visualization_msgs/Marker",
+      VISUALIZATION_MSGS_MARKER_ARRAY_DATATYPE: "visualization_msgs/MarkerArray",
+      POSE_STAMPED_DATATYPE,
+      POINT_CLOUD_DATATYPE,
+      SENSOR_MSGS_LASER_SCAN_DATATYPE: "sensor_msgs/LaserScan",
+      NAV_MSGS_OCCUPANCY_GRID_DATATYPE: "nav_msgs/OccupancyGrid",
+      GEOMETRY_MSGS_POLYGON_STAMPED_DATATYPE: "geometry_msgs/PolygonStamped",
+    };
 
-    const getMetadata = () => {};
-    getMetadata.topics = [];
     return {
-      Panel: {
-        topicPrefixes: {
-          "": {
-            labelText: "Default",
-            icon: CheckboxBlankCircleOutline,
-            iconPrefix: "",
-          },
-          [SECOND_BAG_PREFIX]: {
-            labelText: "Input 2",
-            icon: FileMultipleIcon,
-            iconPrefix: "2",
-            tooltipText: "topics prefixed with '/webviz_bag_2'",
-          },
+      DiagnosticSummary: {
+        defaultConfig: {
+          pinnedIds: [],
+          hardwareIdFilter: "",
+          topicToRender: DIAGNOSTIC_TOPIC,
         },
       },
-      DiagnosticSummary: { defaultConfig: { pinnedIds: [] } },
       ImageView: {
         defaultConfig: {
           cameraTopic: "",
@@ -112,6 +126,9 @@ const defaultHooks = {
           scale: 0.2,
           transformMarkers: false,
           synchronize: false,
+          mode: "fit",
+          zoomPercentage: 100,
+          offset: [0, 0],
         },
         imageMarkerDatatypes: ["visualization_msgs/ImageMarker"],
         imageMarkerArrayDatatypes: [],
@@ -128,12 +145,33 @@ const defaultHooks = {
           pinTopics: false,
           topicSettings: {},
         },
+        SUPPORTED_MARKER_DATATYPES,
+        allSupportedMarkers: [
+          "arrow",
+          "cube",
+          "cubeList",
+          "cylinder",
+          "filledPolygon",
+          "grid",
+          "instancedLineList",
+          "laserScan",
+          "linedConvexHull",
+          "lineList",
+          "lineStrip",
+          "pointcloud",
+          "points",
+          "poseMarker",
+          "sphere",
+          "sphereList",
+          "text",
+          "triangleList",
+        ],
+        renderAdditionalMarkers: () => {},
         topics: [],
         icons: {},
-        WorldComponent: World,
+        AdditionalToolbarItems: () => null,
         LaserScanVert,
-        getMetadata,
-        setGlobalDataInSceneBuilder: (globalData, selectionState, topicsToRender) => ({
+        setGlobalVariablesInSceneBuilder: (globalVariables, selectionState, topicsToRender) => ({
           selectionState,
           topicsToRender,
         }),
@@ -150,7 +188,10 @@ const defaultHooks = {
         },
         consumePose: () => {},
         getMarkerColor: (topic, markerColor) => markerColor,
-        getDefaultTopicTree: () => ({ name: "root" }),
+        getDefaultTopicTree: () => ({
+          name: "root",
+          children: [{ name: "TF", children: [], description: "Visualize relationships between /tf frames." }],
+        }),
         hasBlacklistTopics: () => false,
         ungroupedNodesCategory: "Topics",
         rootTransformFrame: "map",
@@ -159,27 +200,38 @@ const defaultHooks = {
       },
       RawMessages: { docLinkFunction: () => undefined },
     };
-  },
+  }),
   Root({ store }) {
     const Root = require("webviz-core/src/components/Root").default;
     return <Root store={store} />;
   },
   topicsWithIncorrectHeaders: () => [],
-  heavyDatatypesWithNoTimeDependency: () => [
-    "sensor_msgs/PointCloud2",
-    "sensor_msgs/LaserScan",
-    "nav_msgs/OccupancyGrid",
-  ],
-  useRaven: () => true,
-  load: () => {},
-  onPanelClose: () => {},
-  onPanelSwap: () => {},
-  onPanelSplit: () => {},
-  onPanelDrag: () => {},
+  load: () => {
+    if (process.env.NODE_ENV === "production" && window.ga) {
+      window.ga("create", "UA-82819136-10", "auto");
+    } else {
+      window.ga = function(...args) {
+        console.log("[debug] ga:", ...args);
+      };
+    }
+    window.ga("send", "pageview");
+  },
   getWorkerDataProviderWorker: () => {
     return require("webviz-core/src/dataProviders/WorkerDataProvider.worker");
   },
   getAdditionalDataProviders: () => {},
+  experimentalFeaturesList() {
+    return {
+      topicGrouping: {
+        name: "Topic Group Management",
+        description:
+          "We're revamping the topic tree to be customizable directly from Webviz. You'll be able to create your own groups and toggle them easily.",
+        developmentDefault: false,
+        productionDefault: false,
+      },
+    };
+  },
+  linkTopicPathSyntaxToHelpPage: () => true,
 };
 
 let hooks = defaultHooks;
@@ -214,11 +266,6 @@ export function loadWebviz(hooksToSet) {
 
   const waitForFonts = require("webviz-core/src/styles/waitForFonts").default;
   const Confirm = require("webviz-core/src/components/Confirm").default;
-  const createRootReducer = require("webviz-core/src/reducers").default;
-  const configureStore = require("webviz-core/src/store").default;
-  const history = require("webviz-core/src/util/history").default;
-
-  const store = configureStore(createRootReducer(history), [routerMiddleware(history)]);
 
   function render() {
     const rootEl = document.getElementById("root");
@@ -228,7 +275,7 @@ export function loadWebviz(hooksToSet) {
     }
 
     waitForFonts(() => {
-      ReactDOM.render(<hooks.Root store={store} history={history} />, rootEl);
+      ReactDOM.render(<hooks.Root history={history} />, rootEl);
     });
   }
 

@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -33,31 +33,36 @@ const systemStateMessages = [
   { header: { stamp: { sec: 1526191541, nsec: 182717960 } }, state: 3 },
   { header: { stamp: { sec: 1526191541, nsec: 286998440 } }, state: 3 },
   { header: { stamp: { sec: 1526191541, nsec: 370689856 } }, state: 3 },
-  { header: { stamp: { sec: 1526191541, nsec: 483672422 } }, state: 3 },
-  { header: { stamp: { sec: 1526191541, nsec: 578787057 } }, state: 3 },
-  { header: { stamp: { sec: 1526191541, nsec: 677515597 } }, state: 3 },
-  { header: { stamp: { sec: 1526191541, nsec: 789110904 } }, state: 3 },
+  { header: { stamp: { sec: 1526191541, nsec: 483672422 } }, state: -1 },
+  { header: { stamp: { sec: 1526191541, nsec: 578787057 } }, state: -1 },
+  { header: { stamp: { sec: 1526191541, nsec: 677515597 } }, state: -1 },
+  { header: { stamp: { sec: 1526191541, nsec: 789110904 } }, state: -1 },
 ];
 
 const fixture = {
   datatypes: {
-    "msgs/SystemState": [
-      { type: "std_msgs/Header", name: "header", isArray: false },
-      { type: "uint8", name: "ERROR", isConstant: true, value: 0 },
-      { type: "uint8", name: "OFF", isConstant: true, value: 1 },
-      { type: "uint8", name: "BOOTING", isConstant: true, value: 2 },
-      { type: "uint8", name: "ACTIVE", isConstant: true, value: 3 },
-      { type: "uint8", name: "state", isArray: false },
-    ],
-    "std_msgs/Header": [
-      { name: "seq", type: "uint32", isArray: false },
-      {
-        name: "stamp",
-        type: "time",
-        isArray: false,
-      },
-      { name: "frame_id", type: "string", isArray: false },
-    ],
+    "msgs/SystemState": {
+      fields: [
+        { type: "std_msgs/Header", name: "header", isArray: false },
+        { type: "int8", name: "UNKNOWN", isConstant: true, value: -1 },
+        { type: "int8", name: "ERROR", isConstant: true, value: 0 },
+        { type: "int8", name: "OFF", isConstant: true, value: 1 },
+        { type: "int8", name: "BOOTING", isConstant: true, value: 2 },
+        { type: "int8", name: "ACTIVE", isConstant: true, value: 3 },
+        { type: "int8", name: "state", isArray: false },
+      ],
+    },
+    "std_msgs/Header": {
+      fields: [
+        { name: "seq", type: "uint32", isArray: false },
+        {
+          name: "stamp",
+          type: "time",
+          isArray: false,
+        },
+        { name: "frame_id", type: "string", isArray: false },
+      ],
+    },
   },
   topics: [{ name: "/some/topic/with/state", datatype: "msgs/SystemState" }],
   activeData: {

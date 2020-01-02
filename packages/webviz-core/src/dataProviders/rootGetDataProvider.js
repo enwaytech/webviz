@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -15,8 +15,8 @@ import IdbCacheReaderDataProvider from "webviz-core/src/dataProviders/IdbCacheRe
 import MeasureDataProvider, {
   instrumentTreeWithMeasureDataProvider,
 } from "webviz-core/src/dataProviders/MeasureDataProvider";
+import MemoryCacheDataProvider from "webviz-core/src/dataProviders/MemoryCacheDataProvider";
 import ParseMessagesDataProvider from "webviz-core/src/dataProviders/ParseMessagesDataProvider";
-import ReadAheadDataProvider from "webviz-core/src/dataProviders/ReadAheadDataProvider";
 import type { DataProviderDescriptor, DataProvider } from "webviz-core/src/dataProviders/types";
 import WorkerDataProvider from "webviz-core/src/dataProviders/WorkerDataProvider";
 import { getGlobalHooks } from "webviz-core/src/loadWebviz";
@@ -27,9 +27,9 @@ const getDataProviderBase = createGetDataProvider({
   BagDataProvider,
   MeasureDataProvider,
   ParseMessagesDataProvider,
-  ReadAheadDataProvider,
   WorkerDataProvider,
   IdbCacheReaderDataProvider,
+  MemoryCacheDataProvider,
   CombinedDataProvider,
   ...getGlobalHooks().getAdditionalDataProviders(),
 });

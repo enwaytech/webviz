@@ -1,11 +1,12 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
+import { isEqual } from "lodash";
 import * as React from "react";
 import styled from "styled-components";
 
@@ -14,6 +15,8 @@ import Flex from "webviz-core/src/components/Flex";
 import { validationErrorToString, type ValidationResult } from "webviz-core/src/components/validators";
 import colors from "webviz-core/src/styles/colors.module.scss";
 import YAML from "webviz-core/src/util/yaml";
+
+const { useState, useCallback, useRef, useLayoutEffect, useEffect } = React;
 
 export const EDIT_FORMAT = { JSON: "json", YAML: "yaml" };
 
@@ -76,14 +79,15 @@ export function ValidatedInputBase({
   stringify,
   value,
 }: BaseProps & ParseAndStringifyFn) {
-  const [error, setError] = React.useState<string>("");
-  const [inputStr, setInputStr] = React.useState<string>("");
-  const prevIncomingVal = React.useRef("");
-  const inputRef = React.useRef<?HTMLTextAreaElement>(null);
+  const [error, setError] = useState<string>("");
+  const [inputStr, setInputStr] = useState<string>("");
+  const prevIncomingVal = useRef("");
+  const inputRef = useRef<?HTMLTextAreaElement>(null);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
 
   // validate the input string, and setError or call onChange if needed
-  const memorizedInputValidation = React.useCallback(
-    (newInputVal: string, onChange?: OnChange) => {
+  const memorizedInputValidation = useCallback(
+    (newInputVal: string, onChangeFcn?: OnChange) => {
       let newVal;
       let newError;
       // parse the empty string directly as empty array or object for validation and onChange callback
@@ -107,17 +111,20 @@ export function ValidatedInputBase({
         setError(validationErrorToString(validationResult));
         return;
       }
-      if (onChange) {
-        onChange(newVal);
+      if (onChangeFcn) {
+        onChangeFcn(newVal);
       }
     },
     [dataValidator, parse, value]
   );
 
-  // whenever the incoming value changes, we'll compare the new value with prevIncomingVal, and reset local state values if they are different
-  React.useEffect(
+  // when not in editing mode, whenever the incoming value changes, we'll compare the new value with prevIncomingVal, and reset local state values if they are different
+  useLayoutEffect(
     () => {
-      if (value !== prevIncomingVal.current) {
+      if (!isEditing && value !== prevIncomingVal.current) {
+        if (isEqual(value, prevIncomingVal.current)) {
+          return;
+        }
         let newVal = "";
         let newError;
         try {
@@ -135,10 +142,22 @@ export function ValidatedInputBase({
         memorizedInputValidation(newVal);
       }
     },
-    [value, prevIncomingVal, stringify, memorizedInputValidation]
+    [value, stringify, memorizedInputValidation, isEditing]
   );
 
-  React.useEffect(
+  const handleChange = useCallback(
+    (e) => {
+      const val = e.currentTarget && e.currentTarget.value;
+      if (!isEditing) {
+        setIsEditing(true);
+      }
+      setInputStr(val);
+      memorizedInputValidation(val, onChange);
+    },
+    [isEditing, memorizedInputValidation, onChange]
+  );
+
+  useEffect(
     () => {
       if (onError && error) {
         onError(error);
@@ -147,25 +166,28 @@ export function ValidatedInputBase({
     [error, onError]
   );
 
-  function handleChange(e) {
-    setInputStr(e.target.value);
-    memorizedInputValidation(e.target.value, onChange);
-  }
-
   // scroll to the bottom when the text gets too long
-  React.useEffect(
+  useLayoutEffect(
     () => {
-      const inputElem = inputRef.current;
-      if (inputElem) {
-        inputElem.scrollTop = inputElem.scrollHeight;
+      if (!isEditing) {
+        const inputElem = inputRef.current;
+        if (inputElem) {
+          inputElem.scrollTop = inputElem.scrollHeight;
+        }
       }
     },
-    [inputStr]
+    [isEditing, inputStr] // update whenever inputStr changes
   );
 
   return (
     <>
-      <StyledTextarea style={inputStyle} innerRef={inputRef} value={inputStr} onChange={handleChange} />
+      <StyledTextarea
+        data-test="validated-input"
+        style={inputStyle}
+        ref={inputRef}
+        value={inputStr}
+        onChange={handleChange}
+      />
       {error && <SError>{error}</SError>}
     </>
   );

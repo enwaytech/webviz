@@ -1,11 +1,12 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
-export const colors = {
+
+const baseColors = {
   DARK: "#08080a",
   DARK1: "#111114",
   DARK2: "#1a1a1f",
@@ -22,6 +23,7 @@ export const colors = {
   LIGHT2: "#cacacc",
 
   GRAY: "#9f9fa2",
+  GRAY2: "#2d2c33",
 
   MAGENTAL1: "#e05ffa",
   MAGENTA: "#c83deb",
@@ -58,4 +60,18 @@ export const colors = {
   REDL1: "#ff6b82",
   RED: "#f54966",
   RED1: "#db3553",
+  RED2: "#ff7c96",
+};
+
+export const colors = {
+  ...baseColors,
+  TEXT_MUTED: baseColors.GRAY,
+  HIGHLIGHT: baseColors.PURPLEL1,
+  // TODO:(Audrey): !!! need design review. Don't use these colors until TopicGrouping feature is finished.
+  HOVER_BACKGROUND_COLOR: baseColors.PURPLE1,
+  TEXTL1: baseColors.LIGHT2,
+  ACTION: baseColors.BLUE,
+  TEXT: baseColors.LIGHT1,
+  TOOLBAR: baseColors.DARK2,
+  TOOLBARL1: baseColors.DARK4,
 };

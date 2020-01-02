@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -10,7 +10,7 @@ import { isEmpty, pick, cloneDeep } from "lodash";
 import { getLeaves } from "react-mosaic-component";
 
 import type { ActionTypes } from "webviz-core/src/actions";
-import { type GlobalData } from "webviz-core/src/hooks/useGlobalData";
+import { type GlobalVariables } from "webviz-core/src/hooks/useGlobalVariables";
 import { getGlobalHooks } from "webviz-core/src/loadWebviz";
 import { type LinkedGlobalVariables } from "webviz-core/src/panels/ThreeDimensionalViz/Interactions/useLinkedGlobalVariables";
 import type {
@@ -19,6 +19,7 @@ import type {
   ImportPanelLayoutPayload,
   PanelConfig,
   UserNodes,
+  PlaybackConfig,
 } from "webviz-core/src/types/panels";
 import { getPanelTypeFromId } from "webviz-core/src/util";
 import Storage from "webviz-core/src/util/Storage";
@@ -26,28 +27,30 @@ import Storage from "webviz-core/src/util/Storage";
 const storage = new Storage();
 
 export const GLOBAL_STATE_STORAGE_KEY = "webvizGlobalState";
+export const defaultPlaybackConfig = { speed: 0.2 };
 
 // TODO(Audrey): remove the storage migration logic and fallback to empty in late 2019
 const OLD_KEYS = {
   layout: "panels.layout",
   savedProps: "panels.savedProps",
   globalData: "panels.globalData",
+  globalVariables: "panels.globalVariables",
   userNodes: "panels.userNodes",
   linkedGlobalVariables: "panels.linkedGlobalVariables",
 };
 
-export function getGlobalStateFromStorage(): any {
-  return storage.get(GLOBAL_STATE_STORAGE_KEY);
-}
 export type PanelsState = {
   layout: any,
   // We store config for each panel in a hash keyed by the panel id.
   // This should at some point be renamed to `config` or `configById` or so,
   // but it's inconvenient to have this diverge from `PANEL_PROPS_KEY`.
   savedProps: { [panelId: string]: PanelConfig },
-  globalData: GlobalData,
+  globalVariables: GlobalVariables,
+  // old state which is migrated to globalVariables. Keeping it here to satisfy flow
+  globalData?: GlobalVariables,
   userNodes: UserNodes,
   linkedGlobalVariables: LinkedGlobalVariables,
+  playbackConfig: PlaybackConfig,
 };
 
 export function setStorageStateAndFallbackToDefault(globalState: any = {}) {
@@ -105,7 +108,7 @@ function changePanelLayout(state: PanelsState, layout: any): PanelsState {
 }
 
 function savePanelConfig(state: PanelsState, payload: SaveConfigPayload): PanelsState {
-  const { id, config } = payload;
+  const { id, config, defaultConfig } = payload;
   // imutable update of key/value pairs
   const newProps = payload.override
     ? { ...state.savedProps, [id]: config }
@@ -114,6 +117,14 @@ function savePanelConfig(state: PanelsState, payload: SaveConfigPayload): Panels
         [id]: {
           // merge new config with old one
           // similar to how this.setState merges props
+          // When updating the panel state, we merge the new config (which may be just a part of config) with the old config and the default config every time.
+          // Previously this was done inside the component, but since the lifecycle of Redux is Action => Reducer => new state => Component,
+          // dispatching an update to the panel state is not instant and can take some time to propagate back to the component.
+          // If the existing panel config is the complete config1, and two actions were fired in quick succession the component with partial config2 and config3,
+          // the correct behavior is to merge config2 with config1 and dispatch that, and then merge config 3 with the combined config2 and config1.
+          // Instead we had stale state so we would merge config3 with config1 and overwrite any keys that exist in config2 but do not exist in config3.
+          // The solution is to do this merge inside the reducer itself, since the state inside the reducer is never stale (unlike the state inside the component).
+          ...defaultConfig,
           ...state.savedProps[id],
           ...config,
         },
@@ -152,9 +163,10 @@ function importPanelLayout(state: PanelsState, payload: ImportPanelLayoutPayload
   const newGlobalState = {
     layout: migratedPayload.layout || {},
     savedProps: migratedPayload.savedProps || {},
-    globalData: migratedPayload.globalData || {},
+    globalVariables: migratedPayload.globalVariables || {},
     userNodes: migratedPayload.userNodes || {},
     linkedGlobalVariables: migratedPayload.linkedGlobalVariables || [],
+    playbackConfig: migratedPayload.playbackConfig || defaultPlaybackConfig,
   };
 
   return newGlobalState;
@@ -184,17 +196,17 @@ export default function panelsReducer(state: PanelsState = getDefaultState(), ac
       break;
 
     case "OVERWRITE_GLOBAL_DATA":
-      newGlobalState.globalData = action.payload;
+      newGlobalState.globalVariables = action.payload;
       break;
 
     case "SET_GLOBAL_DATA": {
-      const globalData = { ...state.globalData, ...action.payload };
-      Object.keys(globalData).forEach((key) => {
-        if (globalData[key] === undefined) {
-          delete globalData[key];
+      const globalVariables = { ...state.globalVariables, ...action.payload };
+      Object.keys(globalVariables).forEach((key) => {
+        if (globalVariables[key] === undefined) {
+          delete globalVariables[key];
         }
       });
-      newGlobalState.globalData = globalData;
+      newGlobalState.globalVariables = globalVariables;
       break;
     }
 
@@ -211,6 +223,11 @@ export default function panelsReducer(state: PanelsState = getDefaultState(), ac
 
     case "SET_LINKED_GLOBAL_VARIABLES": {
       newGlobalState.linkedGlobalVariables = action.payload;
+      break;
+    }
+
+    case "SET_PLAYBACK_CONFIG": {
+      newGlobalState.playbackConfig = action.payload;
       break;
     }
 

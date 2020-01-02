@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -22,9 +22,10 @@ import ExpandingToolbar, { ToolGroup, ToolGroupFixedSizePane } from "webviz-core
 import Icon from "webviz-core/src/components/Icon";
 import { useChangeDetector } from "webviz-core/src/components/MessageHistory/hooks";
 import PanelContext from "webviz-core/src/components/PanelContext";
+import { decodeAdditionalFields } from "webviz-core/src/panels/ThreeDimensionalViz/commands/Pointclouds/PointCloudBuilder";
 import styles from "webviz-core/src/panels/ThreeDimensionalViz/Layout.module.scss";
-import colors from "webviz-core/src/styles/colors.module.scss";
 import type { SaveConfig, PanelConfig } from "webviz-core/src/types/panels";
+import { colors } from "webviz-core/src/util/colors";
 
 export const SRow = styled.div`
   display: flex;
@@ -33,15 +34,15 @@ export const SRow = styled.div`
   margin: 4px 0;
 `;
 export const SLabel = styled.label`
-  width: 96px;
+  width: ${(props) => (props.width ? `${props.width}px` : "80px")};
   margin: 4px 0;
 `;
 export const SValue = styled.div`
-  color: ${colors.lightPurple};
+  color: ${colors.HIGHLIGHT};
   word-break: break-word;
 `;
 export const SEmptyState = styled.div`
-  color: ${colors.textMuted};
+  color: ${colors.TEXT_MUTED};
   line-height: 1.4;
   margin-bottom: 8px;
 `;
@@ -51,10 +52,11 @@ export const LINKED_VARIABLES_TAB_TYPE = "Linked variables";
 export type TabType = typeof OBJECT_TAB_TYPE | typeof LINKED_VARIABLES_TAB_TYPE;
 
 type Props = {
-  selectedObject: ?MouseEventObject,
-  onClearSelectedObject: () => void,
-  defaultSelectedTab?: TabType, // for UI testing
+  defaultSelectedTab?: ?TabType, // for UI testing
   interactionData: ?InteractionData,
+  isDrawing: boolean,
+  onClearSelectedObject: () => void,
+  selectedObject: ?MouseEventObject,
 };
 
 type PropsWithConfig = Props & {
@@ -65,18 +67,19 @@ type PropsWithConfig = Props & {
 const InteractionsBaseComponent = React.memo<PropsWithConfig>(function InteractionsBaseComponent({
   selectedObject,
   interactionData,
+  isDrawing,
   onClearSelectedObject,
   defaultSelectedTab,
   disableAutoOpenClickedObject,
   saveConfig,
 }: PropsWithConfig) {
   const [selectedTab, setSelectedTab] = React.useState<?TabType>(defaultSelectedTab);
-  const shouldOpenTab = useChangeDetector([selectedObject], !!selectedObject);
+  const selectedObjectChanged = useChangeDetector([selectedObject], !!selectedObject);
   React.useEffect(
     () => {
-      if (!disableAutoOpenClickedObject) {
-        if (shouldOpenTab && selectedTab !== OBJECT_TAB_TYPE) {
-          // auto open Object tab if it's not already open
+      if (!disableAutoOpenClickedObject && !isDrawing) {
+        // auto open Object tab if the object changed, the tab is not already open, and the user is not drawing
+        if (selectedObjectChanged && selectedTab !== OBJECT_TAB_TYPE) {
           setSelectedTab(OBJECT_TAB_TYPE);
         } else if (!selectedObject && selectedTab === OBJECT_TAB_TYPE) {
           // auto collapse the Object pane when there is no object and auto open is enabled
@@ -84,11 +87,16 @@ const InteractionsBaseComponent = React.memo<PropsWithConfig>(function Interacti
         }
       }
     },
-    [disableAutoOpenClickedObject, shouldOpenTab, selectedTab, selectedObject]
+    [disableAutoOpenClickedObject, selectedObjectChanged, selectedTab, selectedObject, isDrawing]
   );
 
   const { object } = selectedObject || {};
   const isPointCloud = object && object.type === 102;
+  const maybeFullyDecodedObject = React.useMemo(
+    () => (isPointCloud ? { ...selectedObject, object: decodeAdditionalFields(object) } : selectedObject),
+    [isPointCloud, object, selectedObject]
+  );
+
   const { linkedGlobalVariables } = useLinkedGlobalVariables();
 
   return (
@@ -113,10 +121,12 @@ const InteractionsBaseComponent = React.memo<PropsWithConfig>(function Interacti
           {selectedObject ? (
             <>
               {interactionData && <GeneralInfo selectedObject={selectedObject} interactionData={interactionData} />}
-              {isPointCloud && <PointCloudDetails selectedObject={selectedObject} interactionData={interactionData} />}
+              {isPointCloud && (
+                <PointCloudDetails selectedObject={maybeFullyDecodedObject} interactionData={interactionData} />
+              )}
               <ObjectDetails
                 linkedGlobalVariables={linkedGlobalVariables}
-                selectedObject={selectedObject}
+                selectedObject={maybeFullyDecodedObject}
                 interactionData={interactionData}
               />
             </>

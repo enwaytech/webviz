@@ -1,11 +1,11 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
-import { ceil, floor, last, max, min, minBy } from "lodash";
+import { last, max, min, minBy } from "lodash";
 import * as React from "react";
 import ChartComponent from "react-chartjs-2";
 import DocumentEvents from "react-document-events";
@@ -18,13 +18,14 @@ import Button from "webviz-core/src/components/Button";
 import createSyncingComponent from "webviz-core/src/components/createSyncingComponent";
 import type { MessageHistoryItem } from "webviz-core/src/components/MessageHistory";
 import TimeBasedChartLegend from "webviz-core/src/components/TimeBasedChart/TimeBasedChartLegend";
+import Tooltip from "webviz-core/src/components/Tooltip";
 import Y_AXIS_ID from "webviz-core/src/panels/Plot/PlotChart";
 import mixins from "webviz-core/src/styles/mixins.module.scss";
 
 type Bounds = {| minX: ?number, maxX: ?number |};
 const SyncTimeAxis = createSyncingComponent<Bounds, Bounds>("SyncTimeAxis", (dataItems: Bounds[]) => ({
-  minX: min(dataItems.map(({ minX }) => (minX === undefined || minX === null ? undefined : floor(minX, 1)))),
-  maxX: max(dataItems.map(({ maxX }) => (maxX === undefined || maxX === null ? undefined : ceil(maxX, 1)))),
+  minX: min(dataItems.map(({ minX }) => (minX == null ? undefined : minX))),
+  maxX: max(dataItems.map(({ maxX }) => (maxX == null ? undefined : maxX))),
 }));
 
 const X_AXIS_ID = "x-axis-1";
@@ -71,6 +72,19 @@ const SLegend = styled.div`
   padding: 30px 0px 10px 0px;
 `;
 
+const MemoizedTooltips = React.memo<{}>(function Tooltips() {
+  return (
+    <React.Fragment>
+      <Tooltip contents={<div>Hold v to only scroll vertically</div>} delay={0}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: 30, bottom: 0 }} />
+      </Tooltip>
+      <Tooltip placement="top" contents={<div>Hold h to only scroll horizontally</div>} delay={0}>
+        <div style={{ position: "absolute", left: 0, right: 0, height: 30, bottom: 0 }} />
+      </Tooltip>
+    </React.Fragment>
+  );
+});
+
 type Props = {|
   type: "scatter" | "multicolorLine",
   width: number,
@@ -89,6 +103,8 @@ type Props = {|
   datasetId?: string,
   onClick?: (MouseEvent) => void,
   saveCurrentYs?: (minY: number, maxY: number) => void,
+  xAxisVal?: "timestamp" | "index",
+  useFixedYAxisWidth?: boolean,
 |};
 type State = {|
   showResetZoom: boolean,
@@ -98,6 +114,7 @@ type State = {|
   userSetMaxX: number | null,
   userSetMinY: number | null,
   userSetMaxY: number | null,
+  xAxisVal: "timestamp" | "index",
 |};
 
 // Create a chart with any y-axis but with an x-axis that shows time since the
@@ -118,6 +135,7 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
     userSetMaxX: null,
     userSetMinY: null,
     userSetMaxY: null,
+    xAxisVal: "timestamp",
   };
 
   componentDidMount() {
@@ -125,13 +143,15 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
   }
 
   static getDerivedStateFromProps(nextProps: Props, prevState: State): State {
-    const { annotations } = prevState;
+    const { annotations, xAxisVal } = prevState;
     const nextAnnotations = nextProps.annotations || [];
+    const nextXAxisVal = nextProps.xAxisVal || "timestamp";
     const currentFutureTime = annotations && annotations.length && annotations[0].value;
     const nextFutureTime = nextAnnotations && nextAnnotations.length && nextAnnotations[0].value;
     return {
       ...prevState,
-      shouldRedraw: currentFutureTime !== nextFutureTime,
+      shouldRedraw: currentFutureTime !== nextFutureTime || xAxisVal !== nextXAxisVal,
+      xAxisVal: nextXAxisVal,
       annotations: nextAnnotations,
     };
   }
@@ -155,33 +175,27 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
     document.removeEventListener("visibilitychange", this._onVisibilityChange);
   }
 
-  // Detect if the min/max is different than what we explicitly set,
-  // which means that the user has panned or zoomed.
-  // Note that for the y-axis timeBasedChartMin/Max is not set at all,
-  // so there we'll check that min/max is not undefined, which is the
-  // intended behavior.
-  // Also note that it's possible that only one of the axis is panned or
-  // zoomed, so in this function we only set `showResetZoom` to `true`,
-  // otherwise one axis might set it to true and the other to false,
-  // causing an infinite loop. We set `showResetZoom` to false in
-  // `_onResetZoom`.
   _onPlotChartUpdate = (axis: any) => {
-    const showResetZoom =
-      typeof axis.options.ticks.timeBasedChartMin === "number" &&
-      typeof axis.options.ticks.timeBasedChartMax === "number" &&
-      (axis.options.ticks.min !== axis.options.ticks.timeBasedChartMin ||
-        axis.options.ticks.max !== axis.options.ticks.timeBasedChartMax);
-    if (showResetZoom && !this.state.showResetZoom) {
-      this.setState({ showResetZoom: true });
-    }
     if (this.props.saveCurrentYs) {
       const scaleId = this.props.yAxes ? this.props.yAxes[0].id : Y_AXIS_ID;
       this.props.saveCurrentYs(axis.chart.scales[scaleId].min, axis.chart.scales[scaleId].max);
     }
   };
 
-  _onPanUpdate = ({ minX, maxX, maxY, minY }: { minX: number, maxX: number, minY: number, maxY: number }) => {
+  _onPanZoomUpdate = (chartInstance: ChartComponent) => {
+    const { xAxes, saveCurrentYs } = this.props;
+    const Y_scaleId = this.props.yAxes[0].id;
+    const X_scaleId = xAxes ? xAxes[0].id : X_AXIS_ID;
+    const minX = chartInstance.chart.scales[X_scaleId].min;
+    const maxX = chartInstance.chart.scales[X_scaleId].max;
+    const minY = chartInstance.chart.scales[Y_scaleId].min;
+    const maxY = chartInstance.chart.scales[Y_scaleId].max;
+
+    if (saveCurrentYs) {
+      saveCurrentYs(minY, maxY);
+    }
     this.setState({
+      showResetZoom: true,
       userSetMinX: minX,
       userSetMaxX: maxX,
       userSetMinY: minY,
@@ -250,7 +264,6 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
       this._tooltip = document.createElement("div");
       chartInstance.canvas.parentNode.appendChild(this._tooltip);
     }
-
     if (this._tooltip) {
       ReactDOM.render(
         <TimeBasedChartTooltip
@@ -266,7 +279,7 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
     if (!this._chart) {
       delete this._mousePosition;
       this._updateTooltip();
-      if (this._bar) {
+      if (this._bar && this._bar.style) {
         this._bar.style.display = "none";
       }
       return;
@@ -281,7 +294,7 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
     ) {
       delete this._mousePosition;
       this._updateTooltip();
-      if (this._bar) {
+      if (this._bar && this._bar.style) {
         this._bar.style.display = "none";
       }
       return;
@@ -290,23 +303,21 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
       x: event.pageX - canvasRect.left,
       y: event.pageY - canvasRect.top,
     };
-    if (this._bar) {
+    if (this._bar && this._bar.style) {
       this._bar.style.display = "block";
       this._bar.style.left = `${this._mousePosition.x}px`;
     }
     this._updateTooltip();
   };
 
-  _chartjsOptions = (minX: number, maxX: number, userMinY: ?number, userMaxY: ?number) => {
-    const { plugins, xAxes, yAxes, saveCurrentYs } = this.props;
+  _chartjsOptions = (minX: ?number, maxX: ?number, userMinY: ?number, userMaxY: ?number) => {
+    const { plugins, xAxes, yAxes, useFixedYAxisWidth } = this.props;
     const { annotations } = this.state;
     const defaultXTicksSettings = {
       fontFamily: mixins.monospaceFont,
       fontSize: 10,
       fontColor: "#eee",
       maxRotation: 0,
-      timeBasedChartMin: minX,
-      timeBasedChartMax: maxX,
     };
     const defaultYTicksSettings = {
       fontFamily: mixins.monospaceFont,
@@ -355,46 +366,52 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
               },
             }))
           : [defaultXAxis],
-        yAxes: yAxes.map((yAxis) => ({
-          ...yAxis,
-          afterUpdate: this._onPlotChartUpdate,
-          ticks:
-            userMinY !== null && userMaxY !== null && (yAxis.ticks.min == null && yAxis.ticks.max == null)
-              ? {
-                  ...defaultYTicksSettings,
-                  ...yAxis.ticks,
-                  min: userMinY,
-                  max: userMaxY,
-                  callback: (...args) =>
-                    yAxis.ticks.callback ? yAxis.ticks.callback(...args) : this._onGetTick(...args),
-                }
-              : {
-                  ...defaultYTicksSettings,
-                  ...yAxis.ticks,
-                  callback: (...args) =>
-                    yAxis.ticks.callback ? yAxis.ticks.callback(...args) : this._onGetTick(...args),
-                },
-        })),
+        yAxes: yAxes.map((yAxis) => {
+          const ticks = {
+            ...defaultYTicksSettings,
+            ...yAxis.ticks,
+            callback: (...args) => (yAxis.ticks.callback ? yAxis.ticks.callback(...args) : this._onGetTick(...args)),
+          };
+          // If the user is manually panning or zooming, don't constrain the y-axis
+          if (this.state.showResetZoom) {
+            delete ticks.min;
+            delete ticks.max;
+          } else {
+            if (userMinY != null) {
+              ticks.min = userMinY;
+            }
+            if (userMaxY != null) {
+              ticks.max = userMaxY;
+            }
+          }
+
+          return {
+            ...yAxis,
+            afterUpdate: this._onPlotChartUpdate,
+            afterFit: (scaleInstance) => {
+              // Sets y-axis labels to a fixed width, so that vertically-aligned charts can be directly compared.
+              // This width is large enough to easily see legend values up to 6 characters wide (ex: 100000 or -12.638).
+              if (useFixedYAxisWidth) {
+                scaleInstance.width = 48;
+              }
+            },
+            ticks,
+          };
+        }),
       },
       onClick: this.props.onClick,
       pan: {
         enabled: true,
         onPan: (chartInstance: ChartComponent) => {
-          const Y_scaleId = this.props.yAxes[0].id;
-          const X_scaleId = xAxes ? xAxes[0].id : X_AXIS_ID;
-          const minX = chartInstance.chart.scales[X_scaleId].min;
-          const maxX = chartInstance.chart.scales[X_scaleId].max;
-          const minY = chartInstance.chart.scales[Y_scaleId].min;
-          const maxY = chartInstance.chart.scales[Y_scaleId].max;
-
-          if (saveCurrentYs) {
-            saveCurrentYs(minY, maxY);
-          }
-
-          this._onPanUpdate({ minX, maxX, maxY, minY });
+          this._onPanZoomUpdate(chartInstance);
         },
       },
-      zoom: { enabled: this.props.zoom },
+      zoom: {
+        enabled: this.props.zoom,
+        onZoom: (chartInstance: ChartComponent) => {
+          this._onPanZoomUpdate(chartInstance);
+        },
+      },
       plugins: plugins || {},
       annotation: { annotations },
     };
@@ -409,33 +426,43 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
 
   renderChart() {
     const { type, width, height, data, isSynced, linesToHide = {} } = this.props;
-    const { userSetMinX, userSetMaxX, userSetMinY, userSetMaxY } = this.state;
+    const { userSetMinX, userSetMaxX, userSetMinY, userSetMaxY, xAxisVal } = this.state;
     const userSetMinOrZero = isNaN(userSetMinX) ? data.minIsZero : userSetMinX;
     const minX = userSetMinOrZero
       ? 0
-      : min(data.datasets.map((dataset) => (dataset.data.length ? dataset.data[0].x : undefined)));
+      : min(data.datasets.map((dataset) => (dataset.data.length > 1 ? dataset.data[0].x : undefined)));
     const maxX =
       typeof userSetMaxX === "number"
         ? userSetMaxX
-        : max(data.datasets.map((dataset) => (dataset.data.length ? last(dataset.data).x : undefined)));
-    const CoreComponent = (
-      <ChartComponent
-        redraw={this.state.shouldRedraw}
-        type={type}
-        width={width}
-        height={height}
-        key={`${width}x${height}`} // https://github.com/jerairrest/react-chartjs-2/issues/60#issuecomment-406376731
-        ref={(ref) => {
-          this._chart = ref;
+        : max(data.datasets.map((dataset) => (dataset.data.length > 1 ? last(dataset.data).x : undefined)));
+
+    const chartProps = {
+      redraw: this.state.shouldRedraw,
+      type,
+      width,
+      height,
+      key: `${width}x${height}`, // https://github.com/jerairrest/react-chartjs-2/issues/60#issuecomment-406376731
+      ref: (ref) => {
+        this._chart = ref;
+      },
+      data: { ...data, datasets: data.datasets.filter((dataset) => !linesToHide[dataset.label]) },
+    };
+
+    return isSynced && xAxisVal === "timestamp" ? (
+      <SyncTimeAxis data={{ minX, maxX }}>
+        {(syncedMinMax) => {
+          const syncedMinX = syncedMinMax.minX != null ? Math.min(minX, syncedMinMax.minX) : minX;
+          const syncedMaxX = syncedMinMax.maxX != null ? Math.max(maxX, syncedMinMax.maxX) : maxX;
+          return (
+            <ChartComponent
+              {...chartProps}
+              options={this._chartjsOptions(syncedMinX, syncedMaxX, userSetMinY, userSetMaxY)}
+            />
+          );
         }}
-        options={this._chartjsOptions(minX, maxX, userSetMinY, userSetMaxY)}
-        data={{ ...data, datasets: data.datasets.filter((dataset) => !linesToHide[dataset.label]) }}
-      />
-    );
-    return isSynced ? (
-      <SyncTimeAxis data={{ minX, maxX }}>{({ minX, maxX }) => CoreComponent}</SyncTimeAxis>
+      </SyncTimeAxis>
     ) : (
-      CoreComponent
+      <ChartComponent {...chartProps} options={this._chartjsOptions(minX, maxX, userSetMinY, userSetMaxY)} />
     );
   }
 
@@ -446,7 +473,7 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
       <div style={{ display: "flex", width: "100%" }}>
         <div style={{ display: "flex", width }}>
           <SRoot onDoubleClick={this._onResetZoom}>
-            <SBar innerRef={(el) => (this._bar = el)} />
+            <SBar ref={(el) => (this._bar = el)} />
             {this.renderChart()}
 
             {this.state.showResetZoom && (
@@ -466,6 +493,7 @@ export default class TimeBasedChart extends React.PureComponent<Props, State> {
             />
           </SRoot>
         </div>
+        <MemoizedTooltips />
         {drawLegend && (
           <SLegend>
             <TimeBasedChartLegend

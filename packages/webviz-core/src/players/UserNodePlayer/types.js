@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -17,23 +17,43 @@ export const DiagnosticSeverity = {
 
 export const Sources = {
   Typescript: "Typescript",
+  DatatypeExtraction: "DatatypeExtraction",
   InputTopicsChecker: "InputTopicsChecker",
   OutputTopicChecker: "OutputTopicChecker",
+  Runtime: "Runtime",
 };
 
 export const ErrorCodes = {
+  RUNTIME: 1,
+  DatatypeExtraction: {
+    NO_DEFAULT_EXPORT: 1,
+    NON_FUNC_DEFAULT_EXPORT: 2,
+    NO_TYPE_RETURN: 3,
+    BAD_TYPE_RETURN: 4,
+    UNKNOWN_ERROR: 5,
+    NO_UNIONS: 6,
+    NO_FUNCTIONS: 7,
+    NO_CLASSES: 8,
+    NO_TYPE_LITERALS: 9,
+    NO_TUPLES: 10,
+    NO_INTERSECTION_TYPES: 11,
+    NO_TYPEOF: 11,
+    PREFER_ARRAY_LITERALS: 13,
+    STRICT_MARKERS_RETURN_TYPE: 14,
+    NO_IMPORTS_IN_RETURN_TYPE: 15,
+    LIMITED_UNIONS: 16,
+  },
   InputTopicsChecker: {
-    NO_INPUTS: "NO_INPUTS",
-    TOPIC_UNAVAILABLE: "TOPIC_UNAVAILABLE",
-    CIRCULAR_IMPORT: "CIRCULAR_IMPORT",
+    NO_INPUTS: 1,
+    TOPIC_UNAVAILABLE: 2,
+    CIRCULAR_IMPORT: 3,
   },
   OutputTopicChecker: {
-    NO_OUTPUTS: "NO_OUTPUTS",
-    BAD_PREFIX: "BAD_PREFIX",
-    NOT_UNIQUE: "NOT_UNIQUE",
+    NO_OUTPUTS: 1,
+    BAD_PREFIX: 2,
+    NOT_UNIQUE: 3,
   },
 };
-
 export type NodeRegistration = {|
   inputs: $ReadOnlyArray<string>,
   output: Topic,
@@ -49,7 +69,7 @@ export type Diagnostic = {|
   startColumn?: number,
   endLineNumber?: number,
   endColumn?: number,
-  code: $Values<typeof ErrorCodes.InputTopicsChecker> | $Values<typeof ErrorCodes.OutputTopicChecker>,
+  code: number,
 |};
 
 export type NodeData = {|
@@ -59,6 +79,11 @@ export type NodeData = {|
   diagnostics: $ReadOnlyArray<Diagnostic>,
   inputTopics: $ReadOnlyArray<string>,
   outputTopic: string,
+  outputDatatype: string,
+  datatypes: RosDatatypes,
+  // Should be ts.Program. Not strongly typing here since we want to keep
+  // Typescript out of the main bundle.
+  program: ?any,
 |};
 
 export type PlayerInfo = $ReadOnly<{|
@@ -69,5 +94,26 @@ export type PlayerInfo = $ReadOnly<{|
 export type NodeDataTransformer = (
   nodeData: NodeData,
   playerStateActiveData: ?PlayerInfo,
-  priorRegistrations: $ReadOnlyArray<NodeRegistration>
+  priorRegistrations: $ReadOnlyArray<Topic>
 ) => NodeData;
+
+export type UserNodeLog = {
+  source: "registerNode" | "processMessage",
+  value: any, // TODO: This should ideally share the type def of `log()` in `lib.js`
+};
+
+export type UserNodeDiagnostics = { [nodeId: string]: { diagnostics: Diagnostic[] } };
+export type UserNodeLogs = { [nodeId: string]: { logs: UserNodeLog[] } };
+
+export type RegistrationOutput = {
+  error: null | string,
+  userNodeLogs: UserNodeLog[],
+  userNodeDiagnostics: Diagnostic[],
+};
+
+export type ProcessMessageOutput = {
+  message: ?{},
+  error: null | string,
+  userNodeLogs: UserNodeLog[],
+  userNodeDiagnostics: Diagnostic[],
+};

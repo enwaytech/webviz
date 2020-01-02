@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -20,8 +20,11 @@ import { useMessagePipeline } from "webviz-core/src/components/MessagePipeline";
 import Panel from "webviz-core/src/components/Panel";
 import PanelToolbar from "webviz-core/src/components/PanelToolbar";
 import filterMap from "webviz-core/src/filterMap";
+import * as PanelAPI from "webviz-core/src/PanelAPI";
 import type { Topic, Message, SubscribePayload, AdvertisePayload } from "webviz-core/src/players/types";
 import { downloadTextFile } from "webviz-core/src/util";
+
+const { useCallback } = React;
 
 const RECORD_ALL = "RECORD_ALL";
 
@@ -75,9 +78,13 @@ function getPublisherGroup({ advertiser }: AdvertisePayload): string {
   return `<unknown: ${advertiser.type} ${advertiser.name}>`;
 }
 
-// Display webviz internal state for debugging and for QA to view topic dependencies.
+// Display webviz internal state for debugging and viewing topic dependencies.
 function Internals(): React.Node {
-  const { subscriptions, publishers, sortedTopics: topics } = useMessagePipeline();
+  const { topics } = PanelAPI.useDataSourceInfo();
+  const subscriptions = useMessagePipeline(
+    useCallback(({ subscriptions: pipelineSubscriptions }) => pipelineSubscriptions, [])
+  );
+  const publishers = useMessagePipeline(useCallback(({ publishers: pipelinePublishers }) => pipelinePublishers, []));
 
   const [groupedSubscriptions, subscriptionGroups] = React.useMemo(
     () => {
@@ -172,12 +179,14 @@ function Internals(): React.Node {
         <MessageHistory paths={recordingTopics} historySize={1}>
           {({ itemsByPath }) => {
             const frame = mapValues(itemsByPath, (items) => items.map(({ message }) => message));
-            const topics = filterMap(Object.keys(itemsByPath), (topic) =>
-              itemsByPath[topic] && itemsByPath[topic].length
-                ? { name: topic, datatype: itemsByPath[topic][0].message.datatype }
-                : null
-            );
-            recordedData.current = { topics, frame };
+            recordedData.current = {
+              topics: filterMap(Object.keys(itemsByPath), (topic) =>
+                itemsByPath[topic] && itemsByPath[topic].length
+                  ? { name: topic, datatype: itemsByPath[topic][0].message.datatype }
+                  : null
+              ),
+              frame,
+            };
             return null;
           }}
         </MessageHistory>

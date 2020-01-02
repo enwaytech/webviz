@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -66,4 +66,9 @@ export const transformDiagnosticToMarkerData = (diagnostic: ts.Diagnostic): Diag
   };
 };
 
-export const baseCompilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES5 };
+// https://www.typescriptlang.org/docs/handbook/compiler-options.html
+export const baseCompilerOptions = {
+  strict: true,
+  target: ts.ScriptTarget.ES5,
+  module: ts.ModuleKind.CommonJS,
+};

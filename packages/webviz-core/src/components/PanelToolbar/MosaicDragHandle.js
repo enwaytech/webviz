@@ -1,6 +1,6 @@
 /* eslint-disable header/header */
 
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -13,10 +13,13 @@ import { DragSource } from "react-dnd";
 import { MosaicDragType, createDragToUpdates } from "react-mosaic-component";
 
 import { getPanelTypeFromMosiac } from "webviz-core/src/components/PanelToolbar/utils";
-import { getGlobalHooks } from "webviz-core/src/loadWebviz";
 
 const dragSource = {
   beginDrag: (props, monitor, component) => {
+    if (props.onDragStart) {
+      props.onDragStart();
+    }
+
     // TODO: Actually just delete instead of hiding
     // The defer is necessary as the element must be present on start for HTML DnD to not cry
     const { mosaicActions, mosaicWindowActions } = component.context;
@@ -28,6 +31,10 @@ const dragSource = {
     };
   },
   endDrag: (props, monitor, component) => {
+    if (props.onDragEnd) {
+      props.onDragEnd();
+    }
+
     const { hideTimer } = monitor.getItem();
     // If the hide call hasn't happened yet, cancel it
     window.clearTimeout(hideTimer);
@@ -35,7 +42,7 @@ const dragSource = {
     const { mosaicWindowActions, mosaicActions } = component.context;
     const type = getPanelTypeFromMosiac(mosaicWindowActions, mosaicActions);
 
-    getGlobalHooks().onPanelDrag(type);
+    window.ga("send", "event", "Panel", "Drag", type);
     const ownPath = component.context.mosaicWindowActions.getPath();
     const dropResult = monitor.getDropResult() || {};
     const { position, path: destinationPath } = dropResult;
@@ -71,6 +78,7 @@ class MosaicDragHandle extends Component {
 }
 
 // connect the drag handle to react dnd
+// This can take two props not specified in DragSource: onDragStart and onDragEnd.
 const ConnectedDragHandle = DragSource(MosaicDragType.WINDOW, dragSource, (connect, monitor) => ({
   connectDragSource: connect.dragSource(),
 }))(MosaicDragHandle);

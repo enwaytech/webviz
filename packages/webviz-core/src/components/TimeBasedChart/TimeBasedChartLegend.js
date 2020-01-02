@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -23,7 +23,7 @@ type Props = {
 
 const checkboxStyle = { height: 12, marginBottom: -2 };
 
-export default class TimeBasedChart extends React.PureComponent<Props> {
+export default class TimeBasedChartLegend extends React.PureComponent<Props> {
   _toggleLine = (label: string) => () => {
     const { datasetId, toggleLine } = this.props;
     toggleLine(datasetId, label);

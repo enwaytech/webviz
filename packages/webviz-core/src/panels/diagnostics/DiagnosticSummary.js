@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -9,22 +9,25 @@
 import PinIcon from "@mdi/svg/svg/pin.svg";
 import cx from "classnames";
 import { sortBy, compact } from "lodash";
-import React from "react";
+import * as React from "react"; // eslint-disable-line import/no-duplicates
 import { hot } from "react-hot-loader/root";
+import { List, AutoSizer } from "react-virtualized";
 
-import DiagnosticsHistory from "./DiagnosticsHistory";
 import type { Config as DiagnosticStatusConfig } from "./DiagnosticStatusPanel";
 import helpContent from "./DiagnosticSummary.help.md";
 import styles from "./DiagnosticSummary.module.scss";
-import { LEVELS, type DiagnosticId, type DiagnosticInfo } from "./util";
+import { LEVELS, type DiagnosticId, type DiagnosticInfo, getNodesByLevel } from "./util";
 import EmptyState from "webviz-core/src/components/EmptyState";
 import Flex from "webviz-core/src/components/Flex";
 import Icon from "webviz-core/src/components/Icon";
-import LargeList from "webviz-core/src/components/LargeList";
 import Panel from "webviz-core/src/components/Panel";
 import PanelToolbar from "webviz-core/src/components/PanelToolbar";
+import TopicToRenderMenu from "webviz-core/src/components/TopicToRenderMenu";
 import { getGlobalHooks } from "webviz-core/src/loadWebviz";
+import DiagnosticsHistory from "webviz-core/src/panels/diagnostics/DiagnosticsHistory";
+import type { Topic } from "webviz-core/src/players/types";
 import type { PanelConfig } from "webviz-core/src/types/panels";
+import { DIAGNOSTIC_TOPIC } from "webviz-core/src/util/globalConstants";
 import toggle from "webviz-core/src/util/toggle";
 
 const LevelClasses = {
@@ -67,11 +70,12 @@ class NodeRow extends React.PureComponent<NodeRowProps> {
   }
 }
 
-type Config = {| pinnedIds: DiagnosticId[] |};
+type Config = {| pinnedIds: DiagnosticId[], topicToRender: string, hardwareIdFilter: string |};
 type Props = {
   config: Config,
   saveConfig: ($Shape<Config>) => void,
   openSiblingPanel: (string, cb: (PanelConfig) => PanelConfig) => void,
+  topics: Topic[],
 };
 
 const getSortedNodes = (nodes: DiagnosticInfo[], pinnedIds: DiagnosticId[]): DiagnosticInfo[] => {
@@ -82,7 +86,7 @@ const getSortedNodes = (nodes: DiagnosticInfo[], pinnedIds: DiagnosticId[]): Dia
 
 class DiagnosticSummary extends React.Component<Props> {
   static panelType = "DiagnosticSummary";
-  static defaultConfig = getGlobalHooks().perPanelHooks().DiagnosticSummary.defaultConfig;
+  static defaultConfig = { ...getGlobalHooks().perPanelHooks().DiagnosticSummary.defaultConfig };
 
   togglePinned = (info: DiagnosticInfo) => {
     this.props.saveConfig({ pinnedIds: toggle(this.props.config.pinnedIds, info.id) });
@@ -95,6 +99,7 @@ class DiagnosticSummary extends React.Component<Props> {
         ({
           selectedHardwareId: info.status.hardware_id,
           selectedName: info.status.name,
+          topicToRender: this.props.config.topicToRender,
         }: DiagnosticStatusConfig)
     );
   };
@@ -112,34 +117,81 @@ class DiagnosticSummary extends React.Component<Props> {
     );
   };
 
+  renderHardwareFilter() {
+    const {
+      config: { hardwareIdFilter },
+      saveConfig,
+    } = this.props;
+    return (
+      <input
+        style={{ width: "100%", padding: "0", background: "transparent", opacity: "0.5" }}
+        value={hardwareIdFilter}
+        placeholder={"Filter hardware id"}
+        onChange={(e) => saveConfig({ hardwareIdFilter: e.target.value })}
+      />
+    );
+  }
+
+  renderTopicToRenderMenu = (topics) => {
+    const {
+      config: { topicToRender },
+      saveConfig,
+    } = this.props;
+    return (
+      <TopicToRenderMenu
+        topicToRender={topicToRender}
+        onChange={(newTopicToRender) => saveConfig({ topicToRender: newTopicToRender })}
+        topics={topics}
+        singleTopicDatatype={"diagnostic_msgs/DiagnosticArray"}
+        defaultTopicToRender={DIAGNOSTIC_TOPIC}
+      />
+    );
+  };
+
   render() {
+    const {
+      config: { topicToRender },
+      topics,
+    } = this.props;
     return (
       <Flex col className={styles.panel}>
-        <PanelToolbar floating helpContent={helpContent} />
-        <Flex col scroll scrollX>
-          <DiagnosticsHistory>
+        <PanelToolbar helpContent={helpContent} additionalIcons={this.renderTopicToRenderMenu(topics)}>
+          {this.renderHardwareFilter()}
+        </PanelToolbar>
+        <Flex col>
+          <DiagnosticsHistory topic={topicToRender}>
             {(buffer) => {
               if (buffer.diagnosticsById.size === 0) {
                 return (
                   <EmptyState>
-                    Waiting for <code>/diagnostics</code> messages
+                    Waiting for <code>{topicToRender}</code> messages
                   </EmptyState>
                 );
               }
-
-              const { pinnedIds } = this.props.config;
+              const { pinnedIds, hardwareIdFilter } = this.props.config;
               const pinnedNodes = pinnedIds.map((id) => buffer.diagnosticsById.get(id));
 
               const nodes: DiagnosticInfo[] = [
                 ...compact(pinnedNodes),
-                ...getSortedNodes(Array.from(buffer.diagnosticsByLevel[LEVELS.STALE].values()), pinnedIds),
-                ...getSortedNodes(Array.from(buffer.diagnosticsByLevel[LEVELS.ERROR].values()), pinnedIds),
-                ...getSortedNodes(Array.from(buffer.diagnosticsByLevel[LEVELS.WARN].values()), pinnedIds),
-                ...getSortedNodes(Array.from(buffer.diagnosticsByLevel[LEVELS.OK].values()), pinnedIds),
+                ...getSortedNodes(getNodesByLevel(buffer, hardwareIdFilter, LEVELS.STALE), pinnedIds),
+                ...getSortedNodes(getNodesByLevel(buffer, hardwareIdFilter, LEVELS.ERROR), pinnedIds),
+                ...getSortedNodes(getNodesByLevel(buffer, hardwareIdFilter, LEVELS.WARN), pinnedIds),
+                ...getSortedNodes(getNodesByLevel(buffer, hardwareIdFilter, LEVELS.OK), pinnedIds),
               ];
-
               return nodes.length === 0 ? null : (
-                <LargeList defaultRowHeight={25} items={nodes} disableScrollToBottom renderRow={this.renderRow} />
+                <AutoSizer>
+                  {({ height, width }) => (
+                    <List
+                      width={width}
+                      height={height}
+                      style={{ outline: "none" }}
+                      rowHeight={25}
+                      rowRenderer={(rowProps) => this.renderRow({ ...rowProps, item: nodes[rowProps.index] })}
+                      rowCount={nodes.length}
+                      overscanRowCount={10}
+                    />
+                  )}
+                </AutoSizer>
               );
             }}
           </DiagnosticsHistory>

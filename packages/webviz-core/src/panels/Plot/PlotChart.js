@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -10,24 +10,35 @@ import React, { PureComponent } from "react";
 import Dimensions from "react-container-dimensions";
 import { createSelector } from "reselect";
 import { Time } from "rosbag";
+import uuid from "uuid";
 
 import styles from "./PlotChart.module.scss";
-import MessageHistory, {
-  getTimestampForMessage,
-  type MessageHistoryData,
-  type MessageHistoryItemsByPath,
-} from "webviz-core/src/components/MessageHistory";
+import { getTimestampForMessage, type MessageHistoryItemsByPath } from "webviz-core/src/components/MessageHistory";
 import TimeBasedChart, { type TimeBasedChartTooltipData } from "webviz-core/src/components/TimeBasedChart";
 import filterMap from "webviz-core/src/filterMap";
 import derivative from "webviz-core/src/panels/Plot/derivative";
 import { type PlotPath, isReferenceLinePlotPathType } from "webviz-core/src/panels/Plot/internalTypes";
 import { lightColor, lineColors } from "webviz-core/src/util/plotColors";
-import { subtractTimes, toSec } from "webviz-core/src/util/time";
+import { isTime, subtractTimes, format, formatTimeRaw, toSec } from "webviz-core/src/util/time";
 
 export type PlotChartPoint = {|
   x: number,
   y: number,
   tooltip: TimeBasedChartTooltipData,
+|};
+
+export type DataSet = {|
+  borderColor: string,
+  borderWidth: number,
+  data: Array<PlotChartPoint>,
+  fill: boolean,
+  key: string,
+  label: string,
+  pointBackgroundColor: string,
+  pointBorderColor: string,
+  pointHoverRadius: number,
+  pointRadius: number,
+  showLine: boolean,
 |};
 
 const Y_AXIS_ID = "Y_AXIS_ID";
@@ -36,7 +47,8 @@ function getDatasetFromMessagePlotPath(
   path: PlotPath,
   itemsByPath: MessageHistoryItemsByPath,
   index: number,
-  startTime: Time
+  startTime: Time,
+  xAxisVal: "timestamp" | "index"
 ) {
   let points: PlotChartPoint[] = [];
   let showLine = true;
@@ -47,17 +59,34 @@ function getDatasetFromMessagePlotPath(
       continue;
     }
 
-    for (const { value, path, constantName } of item.queriedData) {
-      if (typeof value === "number" || typeof value === "boolean") {
+    for (const [idx, { value, path: queriedPath, constantName }] of item.queriedData.entries()) {
+      if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
+        const valueNum = Number(value);
+        if (!isNaN(valueNum)) {
+          points.push({
+            x: xAxisVal === "timestamp" ? toSec(subtractTimes(timestamp, startTime)) : idx,
+            y: valueNum,
+            tooltip: { item, path: queriedPath, value, constantName, startTime },
+          });
+        }
+      } else if (isTime(value)) {
+        // $FlowFixMe - %checks on isTime can't convince Flow that the object is actually a Time. Related: https://github.com/facebook/flow/issues/3614
+        const timeValue = (value: Time);
         points.push({
-          x: toSec(subtractTimes(timestamp, startTime)),
-          y: Number(value),
-          tooltip: { item, path, value, constantName, startTime },
+          x: xAxisVal === "timestamp" ? toSec(subtractTimes(timestamp, startTime)) : idx,
+          y: toSec(timeValue),
+          tooltip: {
+            item,
+            path: queriedPath,
+            value: `${format(timeValue)} (${formatTimeRaw(timeValue)})`,
+            constantName,
+            startTime,
+          },
         });
       }
     }
     // If we have added more than one point for this message, make it a scatter plot.
-    if (item.queriedData.length > 1) {
+    if (item.queriedData.length > 1 && xAxisVal !== "index") {
       showLine = false;
     }
   }
@@ -74,7 +103,7 @@ function getDatasetFromMessagePlotPath(
 
   return {
     borderColor: lineColors[index % lineColors.length],
-    label: path.value,
+    label: path.value || uuid.v4(),
     key: index.toString(),
     showLine,
     fill: false,
@@ -102,12 +131,17 @@ function getAnnotationFromReferenceLine(path: PlotPath, index: number) {
   };
 }
 
-function getDatasets(paths: PlotPath[], itemsByPath: MessageHistoryItemsByPath, startTime: Time) {
+export function getDatasets(
+  paths: PlotPath[],
+  itemsByPath: MessageHistoryItemsByPath,
+  startTime: Time,
+  xAxisVal: "timestamp" | "index"
+): DataSet[] {
   return filterMap(paths, (path: PlotPath, index: number) => {
     if (!path.enabled) {
       return null;
     } else if (!isReferenceLinePlotPathType(path)) {
-      return getDatasetFromMessagePlotPath(path, itemsByPath, index, startTime);
+      return getDatasetFromMessagePlotPath(path, itemsByPath, index, startTime, xAxisVal);
     }
     return null;
   });
@@ -155,39 +189,33 @@ type PlotChartProps = {|
   minYValue: number,
   maxYValue: number,
   saveCurrentYs: (minY: number, maxY: number) => void,
+  datasets: DataSet[],
+  xAxisVal: "timestamp" | "index",
 |};
 export default class PlotChart extends PureComponent<PlotChartProps> {
   render() {
-    const { paths, minYValue, maxYValue, saveCurrentYs } = this.props;
+    const { paths, minYValue, maxYValue, saveCurrentYs, datasets, xAxisVal } = this.props;
+    const annotations = getAnnotations(paths);
     return (
-      // Don't filter out disabled paths when passing into <MessageHistory>, because we still want
-      // easy access to the history when turning the disabled paths back on.
-      <MessageHistory paths={paths.map((path) => path.value)}>
-        {({ itemsByPath, startTime }: MessageHistoryData) => {
-          const datasets = getDatasets(paths, itemsByPath, startTime);
-          const annotations = getAnnotations(paths);
-
-          return (
-            <div className={styles.root}>
-              <Dimensions>
-                {({ width, height }) => (
-                  <TimeBasedChart
-                    isSynced
-                    zoom
-                    width={width}
-                    height={height}
-                    data={{ datasets }}
-                    annotations={annotations}
-                    type="scatter"
-                    yAxes={yAxes({ minY: minYValue, maxY: maxYValue, scaleId: Y_AXIS_ID })}
-                    saveCurrentYs={saveCurrentYs}
-                  />
-                )}
-              </Dimensions>
-            </div>
-          );
-        }}
-      </MessageHistory>
+      <div className={styles.root}>
+        <Dimensions>
+          {({ width, height }) => (
+            <TimeBasedChart
+              isSynced
+              zoom
+              width={width}
+              height={height}
+              data={{ datasets }}
+              annotations={annotations}
+              type="scatter"
+              yAxes={yAxes({ minY: minYValue, maxY: maxYValue, scaleId: Y_AXIS_ID })}
+              saveCurrentYs={saveCurrentYs}
+              xAxisVal={xAxisVal}
+              useFixedYAxisWidth
+            />
+          )}
+        </Dimensions>
+      </div>
     );
   }
 }

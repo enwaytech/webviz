@@ -1,11 +1,13 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
 //  You may not use this file except in compliance with the License.
 
+import ChartLineVariantIcon from "@mdi/svg/svg/chart-line-variant.svg";
+import DotsHorizontalIcon from "@mdi/svg/svg/dots-horizontal.svg";
 import cx from "classnames";
 import { clamp } from "lodash";
 import * as React from "react";
@@ -16,8 +18,12 @@ import styled from "styled-components";
 import style from "./DiagnosticStatus.module.scss";
 import { LEVEL_NAMES, type DiagnosticInfo, type KeyValue, type DiagnosticStatusMessage } from "./util";
 import Flex from "webviz-core/src/components/Flex";
+import Icon from "webviz-core/src/components/Icon";
 import Tooltip from "webviz-core/src/components/Tooltip";
+import { openSiblingPlotPanel } from "webviz-core/src/panels/Plot";
+import { openSiblingStateTransitionsPanel } from "webviz-core/src/panels/StateTransitions";
 import colors from "webviz-core/src/styles/colors.module.scss";
+import type { PanelConfig } from "webviz-core/src/types/panels";
 
 const MIN_SPLIT_FRACTION = 0.1;
 
@@ -25,6 +31,8 @@ type Props = {|
   info: DiagnosticInfo,
   splitFraction: number,
   onChangeSplitFraction: ?(number) => void,
+  topicToRender: string,
+  openSiblingPanel: (string, cb: (PanelConfig) => PanelConfig) => void,
 |};
 
 const ResizeHandle = styled.div.attrs({
@@ -62,9 +70,12 @@ const KeyValueTable = styled.table`
   white-space: pre-line;
   overflow-wrap: break-word;
   text-align: left;
+  tr:nth-child(odd) {
+    background-color: #222;
+  }
   td {
-    border: 1px solid $divider;
-    padding: 0 3px;
+    border: none;
+    padding: 1px 3px;
   }
   /* nested table styles */
   table {
@@ -181,14 +192,24 @@ class DiagnosticStatus extends React.Component<Props, *> {
     window.removeEventListener("mouseup", this._resizeMouseUp);
   }
 
-  _renderKeyValueCell(cls: string, html: ?{ __html: string }, str: string) {
+  _renderKeyValueCell(cls: string, html: ?{ __html: string }, str: string, openPlotPanelIconElem?: React.Node) {
     if (html) {
       return <td className={style.valueCell} dangerouslySetInnerHTML={html} />;
     }
-    return <td className={style.valueCell}>{str || "\xa0"}</td>;
+    return (
+      <td className={style.valueCell}>
+        {str || "\xa0"}
+        {openPlotPanelIconElem}
+      </td>
+    );
   }
 
   _renderKeyValueSections = (values: FormattedKeyValue[]): React.Node => {
+    // get topicToRender, hardware_id and idx
+    // Add a icon and open plot panel with this path:
+    // /${topicToRender}.status[:]{hardware_id==${hardware_id}}.values[idx].value
+    const { info, topicToRender, openSiblingPanel } = this.props;
+    const hardware_id = info.status.hardware_id;
     let inCollapsedSection = false;
     let ellipsisShown = false;
     return values.map((kv, idx) => {
@@ -216,10 +237,32 @@ class DiagnosticStatus extends React.Component<Props, *> {
           </tr>
         );
       }
+      const valuePath = `${topicToRender}.status[:]{hardware_id=="${hardware_id}"}.values[:]{key=="${kv.key}"}.value`;
+      let openPlotPanelIconElem = null;
+      if (kv.value && kv.value.length > 0) {
+        openPlotPanelIconElem = !isNaN(Number(kv.value)) ? (
+          <Icon
+            fade
+            dataTest="open-plot-icon"
+            className={style.plotIcon}
+            onClick={() => openSiblingPlotPanel(openSiblingPanel, valuePath)}
+            tooltip="Line chart">
+            <ChartLineVariantIcon />
+          </Icon>
+        ) : (
+          <Icon
+            fade
+            className={style.stateTransitionsIcon}
+            onClick={() => openSiblingStateTransitionsPanel(openSiblingPanel, valuePath)}
+            tooltip="State Transitions">
+            <DotsHorizontalIcon />
+          </Icon>
+        );
+      }
       return (
-        <tr key={idx}>
+        <tr key={idx} className={style.row}>
           {this._renderKeyValueCell(style.keyCell, kv.keyHtml, kv.key)}
-          {this._renderKeyValueCell(style.valueCell, kv.valueHtml, kv.value)}
+          {this._renderKeyValueCell(style.valueCell, kv.valueHtml, kv.value, openPlotPanelIconElem)}
         </tr>
       );
     });
@@ -238,7 +281,7 @@ class DiagnosticStatus extends React.Component<Props, *> {
         <div style={{ position: "relative", height: "100%" }}>
           {/* use data attribute as a hook for use in screenshot tests */}
           <ResizeHandle data-test-resizehandle splitFraction={splitFraction} onMouseDown={this._resizeMouseDown} />
-          <KeyValueTable innerRef={this._tableRef}>
+          <KeyValueTable ref={this._tableRef}>
             <tbody>
               {/* Use a dummy row to fix the column widths */}
               <tr style={{ height: 0 }}>

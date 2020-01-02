@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2019-present, GM Cruise LLC
+//  Copyright (c) 2019-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -15,16 +15,16 @@ import PanelSetup from "webviz-core/src/stories/PanelSetup";
 
 storiesOf("<Note>", module)
   .addDecorator(withScreenshot())
-  .add("default", () => {
-    const fixture = {
-      topics: [],
-      datatypes: {
-        "std_msgs/String": [{ name: "noteText", type: "string" }],
-      },
-      frame: {},
-    };
+  .add("empty", () => {
     return (
-      <PanelSetup fixture={fixture}>
+      <PanelSetup fixture={{ topics: [], datatypes: {}, frame: {} }}>
+        <Note />
+      </PanelSetup>
+    );
+  })
+  .add("with text", () => {
+    return (
+      <PanelSetup fixture={{ topics: [], datatypes: {}, frame: {} }}>
         <Note config={{ noteText: "abc" }} />
       </PanelSetup>
     );

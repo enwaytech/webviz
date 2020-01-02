@@ -1,6 +1,6 @@
 // @flow
 //
-//  Copyright (c) 2018-present, GM Cruise LLC
+//  Copyright (c) 2018-present, Cruise LLC
 //
 //  This source code is licensed under the Apache License, Version 2.0,
 //  found in the LICENSE file in the root directory of this source tree.
@@ -11,12 +11,10 @@ import { createMemoryHistory } from "history";
 import * as React from "react";
 
 import { savePanelConfig } from "webviz-core/src/actions/panels";
-import { getFilteredFormattedTopics } from "webviz-core/src/components/MessageHistory/topicPrefixUtils";
 import { MockMessagePipelineProvider } from "webviz-core/src/components/MessagePipeline";
 import Panel from "webviz-core/src/components/Panel";
 import createRootReducer from "webviz-core/src/reducers";
 import configureStore from "webviz-core/src/store/configureStore.testing";
-import { SECOND_BAG_PREFIX } from "webviz-core/src/util/globalConstants";
 
 function getDummyPanel(renderFn) {
   type DummyConfig = {
@@ -47,7 +45,7 @@ function Context(props: { children: React.Node, store?: any }) {
   return (
     <MockMessagePipelineProvider
       topics={[{ name: "/some/topic", datatype: "some_datatype" }]}
-      datatypes={{ some_datatype: [] }}
+      datatypes={{ some_datatype: { fields: [] } }}
       store={props.store}>
       {props.children}
     </MockMessagePipelineProvider>
@@ -70,7 +68,7 @@ describe("Panel", () => {
       {
         capabilities: [],
         config: { someString: "hello world" },
-        datatypes: { some_datatype: [] },
+        datatypes: { some_datatype: { fields: [] } },
         openSiblingPanel: expect.any(Function),
         saveConfig: expect.any(Function),
         updatePanelConfig: expect.any(Function),
@@ -87,7 +85,7 @@ describe("Panel", () => {
     const someString = "someNewString";
 
     const store = getStore();
-    store.dispatch(savePanelConfig({ id: childId, config: { someString } }));
+    store.dispatch(savePanelConfig({ id: childId, config: { someString }, defaultConfig: {} }));
     mount(
       <Context store={store}>
         <DummyPanel childId={childId} />
@@ -99,7 +97,7 @@ describe("Panel", () => {
       {
         capabilities: [],
         config: { someString },
-        datatypes: { some_datatype: [] },
+        datatypes: { some_datatype: { fields: [] } },
         openSiblingPanel: expect.any(Function),
         saveConfig: expect.any(Function),
         updatePanelConfig: expect.any(Function),
@@ -120,23 +118,7 @@ describe("Panel", () => {
     );
 
     expect(renderFn.mock.calls.length).toEqual(1);
-    store.dispatch(savePanelConfig({ id: "someOtherId", config: {} }));
+    store.dispatch(savePanelConfig({ id: "someOtherId", config: {}, defaultConfig: {} }));
     expect(renderFn.mock.calls.length).toEqual(1);
   });
-});
-
-it("filters and formats topics appropriately, according to topicPrefix", () => {
-  const topics = [
-    { name: "/topicA", datatype: "some/datatype" },
-    { name: "/other_prefix/topicA", datatype: "some/datatype" },
-    { name: "/topicB", datatype: "some/datatype" },
-    { name: "/other_prefix/topicB", datatype: "some/datatype" },
-    { name: "/topicC", datatype: "some/datatype" },
-    { name: "/webviz_bag_2/topicC", datatype: "some/datatype" },
-    { name: "/topicD", datatype: "some/datatype" },
-    { name: "/webviz_bag_2/topicD", datatype: "some/datatype" },
-  ];
-
-  expect(getFilteredFormattedTopics(topics, SECOND_BAG_PREFIX).map((t) => t.name)).toEqual(["/topicC", "/topicD"]);
-  expect(getFilteredFormattedTopics(topics, "")).toEqual(topics);
 });
